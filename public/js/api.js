@@ -29,6 +29,10 @@ export function getExercises() {
   return request('/api/exercises');
 }
 
+export function getCachedExercises() {
+  return request('/api/exercises/cached');
+}
+
 export async function getExerciseTcx(id) {
   try {
     const res = await fetch(`/api/exercises/${id}/tcx`);

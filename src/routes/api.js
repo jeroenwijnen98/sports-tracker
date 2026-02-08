@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { tokenCheck } from '../middleware/tokenCheck.js';
 import { getExercises, polarFetch, polarFetchRaw } from '../services/polarApi.js';
+import { readCache, appendToCache } from '../services/exerciseCache.js';
 
 const router = Router();
 
@@ -9,10 +10,24 @@ router.use(tokenCheck);
 router.get('/exercises', async (req, res) => {
   try {
     const exercises = await getExercises(req.accessToken, req.polarUserId);
+    // Cache any new exercises server-side
+    if (exercises.length > 0) {
+      await appendToCache(exercises);
+    }
     res.json(exercises);
   } catch (err) {
     console.error('Exercises fetch error:', err.message);
     res.status(502).json({ error: 'Failed to fetch exercises from Polar' });
+  }
+});
+
+router.get('/exercises/cached', async (req, res) => {
+  try {
+    const cached = await readCache();
+    res.json(cached);
+  } catch (err) {
+    console.error('Cache read error:', err.message);
+    res.json([]);
   }
 });
 

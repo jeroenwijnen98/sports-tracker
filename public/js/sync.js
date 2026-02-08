@@ -1,17 +1,31 @@
-import { getExercises } from './api.js';
+import { getExercises, getCachedExercises } from './api.js';
 import { getAll, put, putMany, get } from './db.js';
 
 const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING'];
 
 /**
- * Sync exercises from Polar API into IndexedDB.
+ * Sync exercises from Polar API + server-side cache into IndexedDB.
  * Returns { newExercises, total } with counts.
  */
 export async function syncExercises() {
-  const remote = await getExercises();
+  // Fetch from both Polar transaction and server-side cache in parallel
+  const [remote, cached] = await Promise.all([
+    getExercises(),
+    getCachedExercises().catch(() => []),
+  ]);
+
+  // Merge both sources, deduplicate by id
+  const seen = new Set();
+  const merged = [];
+  for (const ex of [...remote, ...cached]) {
+    if (!seen.has(ex.id)) {
+      seen.add(ex.id);
+      merged.push(ex);
+    }
+  }
 
   // Filter to running sports only
-  const runningExercises = remote.filter((ex) =>
+  const runningExercises = merged.filter((ex) =>
     RUNNING_SPORTS.includes(ex['detailed-sport-info'])
   );
 
