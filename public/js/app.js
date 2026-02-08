@@ -1,6 +1,8 @@
 import { getAuthStatus, logout } from './api.js';
 import { syncExercises, recalcAllShoeKm } from './sync.js';
+import { backgroundFetchDetails } from './services/detailData.js';
 import { renderActivities } from './views/activities.js';
+import { renderActivity } from './views/activity.js';
 import { renderShoes } from './views/shoes.js';
 import { showToast } from './components/toast.js';
 
@@ -51,6 +53,10 @@ async function doSync() {
 
     if (result.newExercises > 0) {
       showToast(`${result.newExercises} nieuwe activiteit(en) gesynchroniseerd`, 'success');
+      // Fire-and-forget: eagerly cache TCX detail data for new exercises
+      if (result.newIds?.length > 0) {
+        backgroundFetchDetails(result.newIds);
+      }
     } else {
       showToast('Alles is up-to-date', 'info');
     }
@@ -95,6 +101,8 @@ tabBtns.forEach((btn) => {
 async function renderActiveTab() {
   if (activeTab === 'activities') {
     await renderActivities();
+  } else if (activeTab === 'activity') {
+    await renderActivity();
   } else if (activeTab === 'shoes') {
     await renderShoes();
   }

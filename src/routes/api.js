@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { tokenCheck } from '../middleware/tokenCheck.js';
-import { getExercises, polarFetch } from '../services/polarApi.js';
+import { getExercises, polarFetch, polarFetchRaw } from '../services/polarApi.js';
 
 const router = Router();
 
@@ -26,6 +26,32 @@ router.get('/exercises/:id', async (req, res) => {
   } catch (err) {
     console.error('Exercise detail error:', err.message);
     res.status(502).json({ error: 'Failed to fetch exercise detail' });
+  }
+});
+
+router.get('/exercises/:id/tcx', async (req, res) => {
+  try {
+    const xml = await polarFetchRaw(
+      req.accessToken,
+      `/exercises/${req.params.id}/tcx`
+    );
+    res.type('application/xml').send(xml);
+  } catch (err) {
+    console.error('TCX fetch error:', err.message);
+    res.status(502).json({ error: 'Failed to fetch TCX data' });
+  }
+});
+
+router.get('/exercises/:id/gpx', async (req, res) => {
+  try {
+    const xml = await polarFetchRaw(
+      req.accessToken,
+      `/exercises/${req.params.id}/gpx`
+    );
+    res.type('application/xml').send(xml);
+  } catch (err) {
+    console.error('GPX fetch error:', err.message);
+    res.status(502).json({ error: 'Failed to fetch GPX data' });
   }
 });
 

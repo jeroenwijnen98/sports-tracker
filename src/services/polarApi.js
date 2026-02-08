@@ -20,6 +20,22 @@ export async function polarFetch(accessToken, path) {
   return res.json();
 }
 
+export async function polarFetchRaw(accessToken, path, accept = 'application/xml') {
+  const res = await fetch(`${API}${path}`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: accept,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Polar API error: ${res.status} ${text}`);
+  }
+
+  return res.text();
+}
+
 /**
  * Fetch exercises using the Polar AccessLink transaction flow:
  * 1. POST /v3/users/{userId}/exercise-transactions  -> creates transaction

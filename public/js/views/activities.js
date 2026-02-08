@@ -1,5 +1,6 @@
 import { getAll } from '../db.js';
 import { createRunCard } from '../components/runCard.js';
+import { openRunDetail } from './runDetail.js';
 
 const panel = document.getElementById('tab-activities');
 
@@ -38,7 +39,9 @@ export async function renderActivities() {
   list.className = 'card-list';
 
   for (const exercise of exercises) {
-    list.appendChild(createRunCard(exercise));
+    list.appendChild(createRunCard(exercise, {
+      onClick: (ex) => openRunDetail(ex.id),
+    }));
   }
 
   panel.appendChild(list);

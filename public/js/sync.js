@@ -34,7 +34,8 @@ export async function syncExercises() {
   }
 
   const total = existingIds.size + newOnes.length;
-  return { newExercises: newOnes.length, total };
+  const newIds = newOnes.map((e) => e.id);
+  return { newExercises: newOnes.length, total, newIds };
 }
 
 /**

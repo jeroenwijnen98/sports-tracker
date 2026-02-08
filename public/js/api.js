@@ -28,3 +28,23 @@ export function logout() {
 export function getExercises() {
   return request('/api/exercises');
 }
+
+export async function getExerciseTcx(id) {
+  try {
+    const res = await fetch(`/api/exercises/${id}/tcx`);
+    if (!res.ok) return null;
+    return res.text();
+  } catch {
+    return null;
+  }
+}
+
+export async function getExerciseGpx(id) {
+  try {
+    const res = await fetch(`/api/exercises/${id}/gpx`);
+    if (!res.ok) return null;
+    return res.text();
+  } catch {
+    return null;
+  }
+}

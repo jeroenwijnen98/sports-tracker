@@ -3,10 +3,17 @@ import { formatDate, formatTime } from '../utils/date.js';
 
 /**
  * Create a run card element from an exercise object.
+ * @param {object} exercise
+ * @param {{ onClick?: (exercise) => void }} options
  */
-export function createRunCard(exercise) {
+export function createRunCard(exercise, options = {}) {
   const el = document.createElement('div');
   el.className = 'run-card';
+
+  if (options.onClick) {
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', () => options.onClick(exercise));
+  }
 
   const distance = exercise.distance || 0;
   const durationSec = parseISODuration(exercise.duration);

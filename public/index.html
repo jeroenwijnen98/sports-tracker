@@ -41,15 +41,20 @@
     </header>
 
     <nav class="tab-bar">
-      <button class="tab-btn active" data-tab="activities">Activities</button>
+      <button class="tab-btn active" data-tab="activities">Recent Runs</button>
+      <button class="tab-btn" data-tab="activity">Activity</button>
       <button class="tab-btn" data-tab="shoes">Shoes</button>
     </nav>
 
     <main class="tab-content">
       <div id="tab-activities" class="tab-panel active"></div>
+      <div id="tab-activity" class="tab-panel"></div>
       <div id="tab-shoes" class="tab-panel"></div>
     </main>
   </div>
+
+  <!-- Run detail overlay -->
+  <div id="run-detail-container" class="run-detail-container"></div>
 
   <!-- Toast container -->
   <div id="toast-container" class="toast-container"></div>
