@@ -43,6 +43,57 @@ export async function getExerciseTcx(id) {
   }
 }
 
+export async function importExerciseTcx(xmlString) {
+  const res = await fetch('/api/exercises/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/xml' },
+    body: xmlString,
+  });
+
+  if (res.status === 401) {
+    window.location.reload();
+    throw new Error('Not authenticated');
+  }
+
+  const data = await res.json();
+
+  // 409 = duplicate, return exercise with a flag
+  if (res.status === 409) {
+    return { ...data.exercise, _duplicate: true };
+  }
+
+  if (!res.ok) {
+    throw new Error(data.error || `Import failed: ${res.status}`);
+  }
+
+  return data;
+}
+
+export async function importExerciseJson(jsonData) {
+  const res = await fetch('/api/exercises/import-json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(jsonData),
+  });
+
+  if (res.status === 401) {
+    window.location.reload();
+    throw new Error('Not authenticated');
+  }
+
+  const data = await res.json();
+
+  if (res.status === 409) {
+    return { ...data.exercise, _duplicate: true };
+  }
+
+  if (!res.ok) {
+    throw new Error(data.error || `Import failed: ${res.status}`);
+  }
+
+  return data;
+}
+
 export async function getExerciseGpx(id) {
   try {
     const res = await fetch(`/api/exercises/${id}/gpx`);

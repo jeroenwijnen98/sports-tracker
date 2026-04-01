@@ -777,6 +777,17 @@
   height: 100%;
 }
 
+.run-detail-retry {
+  text-align: center;
+  padding: 24px 0;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.run-detail-retry .btn {
+  margin-top: 12px;
+}
+
 /* Laps table */
 .laps-table {
   width: 100%;

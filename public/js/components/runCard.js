@@ -24,7 +24,7 @@ export function createRunCard(exercise, options = {}) {
   el.innerHTML = `
     <div class="run-card-header">
       <span class="run-card-sport">${sportLabel(sport)}</span>
-      <span class="run-card-date">${formatDate(startTime)} · ${formatTime(startTime)}</span>
+      <span class="run-card-date">${formatDate(startTime)} · ${formatTime(startTime)}${exercise.device ? ` · ${exercise.device}` : ''}</span>
     </div>
     <div class="run-card-distance">
       ${formatDistance(distance)}<span class="run-card-unit">km</span>

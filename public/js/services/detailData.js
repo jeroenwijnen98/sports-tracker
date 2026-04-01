@@ -1,7 +1,9 @@
-import { get, put } from '../db.js';
+import { get, put, getAll } from '../db.js';
 import { getExerciseTcx, getExerciseGpx } from '../api.js';
 import { parseTcx } from '../utils/tcxParser.js';
 import { parseGpx } from '../utils/gpxParser.js';
+
+const RETRY_AFTER_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * Get detailed data (trackpoints, laps, route) for an exercise.
@@ -12,13 +14,29 @@ export async function getDetailData(exerciseId) {
   const exercise = await get('exercises', exerciseId);
   if (!exercise) return null;
 
-  // Return cached data
+  // Return cached data (retry unavailable entries after TTL)
   if (exercise.detailData) {
-    return exercise.detailData.unavailable ? null : exercise.detailData;
+    if (!exercise.detailData.unavailable) return exercise.detailData;
+    const age = Date.now() - (exercise.detailData.timestamp || 0);
+    if (age < RETRY_AFTER_MS) return null;
   }
 
+  return fetchAndCacheDetail(exercise);
+}
+
+/**
+ * Force-retry fetching detail data, ignoring any cached unavailable state.
+ */
+export async function retryDetailData(exerciseId) {
+  const exercise = await get('exercises', exerciseId);
+  if (!exercise) return null;
+  delete exercise.detailData;
+  return fetchAndCacheDetail(exercise);
+}
+
+async function fetchAndCacheDetail(exercise) {
   // Try TCX
-  const tcxXml = await getExerciseTcx(exerciseId);
+  const tcxXml = await getExerciseTcx(exercise.id);
   if (tcxXml) {
     const data = parseTcx(tcxXml);
     exercise.detailData = data;
@@ -27,7 +45,7 @@ export async function getDetailData(exerciseId) {
   }
 
   // Fallback: try GPX for map-only data
-  const gpxXml = await getExerciseGpx(exerciseId);
+  const gpxXml = await getExerciseGpx(exercise.id);
   if (gpxXml) {
     const data = parseGpx(gpxXml);
     data.laps = [];
@@ -39,10 +57,23 @@ export async function getDetailData(exerciseId) {
     return data;
   }
 
-  // Both failed — cache as unavailable to prevent repeated 404s
-  exercise.detailData = { unavailable: true };
+  // Both failed — cache as unavailable with timestamp for TTL retry
+  exercise.detailData = { unavailable: true, timestamp: Date.now() };
   await put('exercises', exercise);
   return null;
+}
+
+/**
+ * Clear all cached unavailable detail data so it gets retried.
+ */
+export async function clearUnavailableDetails() {
+  const exercises = await getAll('exercises');
+  for (const ex of exercises) {
+    if (ex.detailData?.unavailable) {
+      delete ex.detailData;
+      await put('exercises', ex);
+    }
+  }
 }
 
 /**

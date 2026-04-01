@@ -72,7 +72,7 @@ async function assignDefaultShoe(exercises) {
  */
 export async function recalcShoeKm(shoeId) {
   const exercises = await getAll('exercises');
-  const assigned = exercises.filter((e) => e.shoeId === shoeId);
+  const assigned = exercises.filter((e) => e.shoeId === shoeId && !e.overlap);
   const totalMeters = assigned.reduce((sum, e) => sum + (e.distance || 0), 0);
   const shoe = await get('shoes', shoeId);
   if (shoe) {

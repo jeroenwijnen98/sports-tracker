@@ -1,5 +1,5 @@
 import { get, del } from '../db.js';
-import { getDetailData } from '../services/detailData.js';
+import { getDetailData, retryDetailData } from '../services/detailData.js';
 import { recalcShoeKm } from '../sync.js';
 import { renderActivities } from './activities.js';
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
@@ -31,7 +31,7 @@ export async function openRunDetail(exerciseId) {
         </button>
         <div class="run-detail-topbar-info">
           <span class="run-detail-sport">${sportLabel(sport)}</span>
-          <span class="run-detail-date">${formatDate(startTime)} · ${formatTime(startTime)}</span>
+          <span class="run-detail-date">${formatDate(startTime)} · ${formatTime(startTime)}${exercise.device ? ` · ${exercise.device}` : ''}</span>
         </div>
       </div>
 
@@ -113,7 +113,49 @@ export async function openRunDetail(exerciseId) {
     renderChart(detail);
     renderLaps(detail);
     renderMap(detail);
+  } else {
+    showRetryButton(exerciseId);
   }
+}
+
+function showRetryButton(exerciseId) {
+  const chartSection = document.getElementById('run-detail-chart-section');
+  if (!chartSection) return;
+
+  chartSection.style.display = '';
+  chartSection.innerHTML = `
+    <div class="run-detail-retry">
+      <p>Details konden niet worden geladen.</p>
+      <button class="btn btn-secondary btn-sm" id="run-detail-retry-btn">Opnieuw proberen</button>
+    </div>
+  `;
+
+  document.getElementById('run-detail-retry-btn').addEventListener('click', async () => {
+    const retryBtn = document.getElementById('run-detail-retry-btn');
+    retryBtn.textContent = 'Laden...';
+    retryBtn.disabled = true;
+
+    const detail = await retryDetailData(exerciseId);
+    if (detail) {
+      chartSection.innerHTML = `
+        <div class="run-detail-chart-toggle" id="chart-toggle">
+          <button class="run-detail-chart-toggle-btn active" data-mode="pace">Tempo</button>
+          <button class="run-detail-chart-toggle-btn" data-mode="hr">Hartslag</button>
+        </div>
+        <div class="run-detail-chart-wrap">
+          <canvas id="run-detail-chart"></canvas>
+        </div>
+      `;
+      renderChart(detail);
+      renderLaps(detail);
+      renderMap(detail);
+      showToast('Details geladen', 'success');
+    } else {
+      retryBtn.textContent = 'Opnieuw proberen';
+      retryBtn.disabled = false;
+      showToast('Details niet beschikbaar', 'error');
+    }
+  });
 }
 
 export function closeRunDetail() {

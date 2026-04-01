@@ -9,7 +9,8 @@ let currentMode = 'Y';
 
 export async function renderActivity() {
   const container = document.getElementById('tab-activity');
-  const exercises = await getAll('exercises');
+  const allExercises = await getAll('exercises');
+  const exercises = allExercises.filter((ex) => !ex.overlap);
 
   const { filtered, bars, periodLabel } = getData(currentMode, exercises);
 
