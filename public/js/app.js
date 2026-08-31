@@ -7,6 +7,7 @@ import { renderActivity } from './views/activity.js';
 import { renderShoes } from './views/shoes.js';
 import { showToast } from './components/toast.js';
 import { parseISODuration } from './utils/format.js';
+import { keepSessionAlive } from './session.js';
 
 const authScreen = document.getElementById('auth-screen');
 const appScreen = document.getElementById('app-screen');
@@ -270,4 +271,5 @@ async function renderActiveTab() {
   }
 }
 
+keepSessionAlive();
 init();

@@ -1,0 +1,51 @@
+#!/bin/bash
+# Launcher: starts the Sports Tracker server if needed, opens the browser, exits.
+# The server shuts itself down once the last browser window closes
+# (SPORTS_AUTOQUIT=1 — see src/services/idleShutdown.js).
+
+# The project directory: normally three levels up from this script, since
+# SportsTracker.app sits in the repo. Falls back to the original checkout so the
+# bundle keeps working if it is moved to /Applications.
+APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
+if [ ! -f "$APP_DIR/server.js" ]; then
+  APP_DIR="/Users/marcwijnen/Developer/sports-tracker"
+fi
+cd "$APP_DIR" || exit 1
+
+fail() { osascript -e "display alert \"Sports Tracker\" message \"$1\""; exit 1; }
+
+[ -f "$APP_DIR/server.js" ] || fail "Could not find the project at $APP_DIR"
+
+# The server reads PORT from .env, so read it from the same place rather than
+# hard-coding a number that would silently drift.
+PORT=$(sed -n 's/^PORT=//p' "$APP_DIR/.env" 2>/dev/null | tr -dc '0-9')
+PORT=${PORT:-3000}
+
+# Prefer the native arm64 Homebrew node; /usr/local holds the x86_64 build,
+# which runs under Rosetta.
+if [ -x "/opt/homebrew/bin/node" ]; then
+  NODE=/opt/homebrew/bin/node
+elif [ -x "/usr/local/bin/node" ]; then
+  NODE=/usr/local/bin/node
+elif command -v node &>/dev/null; then
+  NODE=$(command -v node)
+else
+  fail "Node.js not found. Install it with: brew install node"
+fi
+
+if [ ! -d "$APP_DIR/node_modules" ]; then
+  NPM_DIR=$(dirname "$($NODE -e 'process.stdout.write(process.execPath)')")
+  "$NPM_DIR/npm" install >/dev/null 2>&1 || fail "npm install failed"
+fi
+
+# -sTCP:LISTEN matters: a plain `lsof -ti:$PORT` also matches browser tabs
+# connected to the server, so a stale tab would look like a running server.
+if [ -z "$(lsof -ti:$PORT -sTCP:LISTEN)" ]; then
+  SPORTS_AUTOQUIT=1 nohup "$NODE" server.js >/dev/null 2>&1 &
+  for _ in {1..30}; do
+    sleep 0.2
+    curl -sf -o /dev/null "http://localhost:$PORT" && break
+  done
+fi
+
+open "http://localhost:$PORT"

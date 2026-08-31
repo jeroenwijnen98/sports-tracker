@@ -2,11 +2,14 @@ import express from 'express';
 import { config } from './src/config.js';
 import authRoutes from './src/routes/auth.js';
 import apiRoutes from './src/routes/api.js';
+import { attachIdleShutdown } from './src/services/idleShutdown.js';
 
 const app = express();
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
+
+attachIdleShutdown(app, { enabled: process.env.SPORTS_AUTOQUIT === '1' });
 
 app.use('/auth', authRoutes);
 app.use('/api', apiRoutes);

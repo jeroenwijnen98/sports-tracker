@@ -8,9 +8,26 @@ A personal running dashboard that syncs data from the Polar AccessLink API, stor
 
 ## Running the App
 
+Normally: open **SportsTracker.app** (in the repo, or installed to /Applications
+via `./install-app.command`). It starts the server if the port is free, opens the
+browser, and exits. The server it starts runs with `SPORTS_AUTOQUIT=1`, so it
+shuts itself down about 15 seconds after the last browser window closes — see
+`src/services/idleShutdown.js`. Each page holds an SSE connection to
+`/api/session`; the count of open connections is what "a window is open" means.
+
+The OAuth round trip is the one case where no window is open but the server must
+survive: hitting `/auth/*` sets a 5-minute hold, or the server would quit while
+the browser sits on flow.polar.com and `/auth/callback` would find a dead port.
+
 ```bash
 node server.js          # starts Express on http://localhost:3000
 ```
+
+Started by hand like that, autoquit is **off** and the server runs until killed —
+which also means a hand-started server occupies the port and the .app will just
+point the browser at it rather than starting a self-quitting one. The bundle's
+icon is built from `public/logo.png` by `scripts/generate-icon.sh`; rerun it
+after changing the logo, then `./install-app.command`.
 
 There are no build steps, no linter, and no test suite. The app requires a `.env` file with `POLAR_CLIENT_ID` and `POLAR_CLIENT_SECRET`.
 
