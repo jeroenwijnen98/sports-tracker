@@ -29,6 +29,15 @@ point the browser at it rather than starting a self-quitting one. The bundle's
 icon is built from `public/logo.png` by `scripts/generate-icon.sh`; rerun it
 after changing the logo, then `./install-app.command`.
 
+## Weekly Sync
+
+`run.sh` is called from productivity-hub's sleepwatcher wake script and runs
+`scripts/sync.js`, appending to `logs/sync.log`. It derives its own project
+directory from the script's location instead of hardcoding one — an earlier
+hardcoded path survived the move to `~/Developer` and failed silently on every
+wake for months. It also probes for node in the known install locations, because
+sleepwatcher hands it a bare PATH.
+
 There are no build steps, no linter, and no test suite. The app requires a `.env` file with `POLAR_CLIENT_ID` and `POLAR_CLIENT_SECRET`.
 
 ## Architecture
