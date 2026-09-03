@@ -96,3 +96,17 @@ The Polar API has two separate data access paths that behave very differently:
 - Polar's `device` / `device-id` name the **recording** device, not the heart rate source. A Pacer run with a paired H10 and one on wrist optical are labelled identically, and `SensorState` in the TCX is `Present` in all but 8 of 111k samples — it carries no information
 - Leaflet is loaded dynamically from CDN only when GPS data exists in the exercise
 - Frontend caches parsed detail data (`detailData`) as a property on exercise objects in IndexedDB. An `{ unavailable: true, checkedAt }` marker with a TTL prevents repeated fetches for exercises without detail data
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in `jeroenwijnen98/sports-tracker`, driven with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical labels, used verbatim: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` and `docs/adr/` at the repo root (neither exists yet; created lazily). See `docs/agents/domain.md`.
