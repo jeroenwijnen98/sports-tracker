@@ -47,9 +47,36 @@ export async function syncExercises() {
     await putMany('exercises', newOnes);
   }
 
+  await backfillHrSensor(runningExercises, existing);
+
   const total = existingIds.size + newOnes.length;
   const newIds = newOnes.map((e) => e.id);
   return { newExercises: newOnes.length, total, newIds };
+}
+
+/**
+ * Copy the server's inferred heart rate sensor onto exercises already stored
+ * locally. Classification runs server-side over the cached TCX, so it can
+ * appear or be recalibrated long after an exercise was first synced. Only the
+ * one field is touched — shoeId, overlap and cached detailData stay put.
+ */
+async function backfillHrSensor(incoming, existing) {
+  const bySensor = new Map(
+    incoming.filter((e) => e.hrSensor).map((e) => [e.id, e.hrSensor])
+  );
+  if (bySensor.size === 0) return;
+
+  const updated = [];
+  for (const exercise of existing) {
+    const sensor = bySensor.get(exercise.id);
+    if (!sensor) continue;
+    if (exercise.hrSensor?.smoothness === sensor.smoothness) continue;
+    updated.push({ ...exercise, hrSensor: sensor });
+  }
+
+  if (updated.length > 0) {
+    await putMany('exercises', updated);
+  }
 }
 
 /**

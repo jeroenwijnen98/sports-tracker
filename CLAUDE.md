@@ -52,6 +52,7 @@ There are no build steps, no linter, and no test suite. The app requires a `.env
 - `src/services/tokenStore.js` — Reads/writes `src/data/token.json` (gitignored)
 - `src/services/xmlCache.js` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
 - `src/services/exerciseCache.js` — Server-side exercise JSON cache (`src/data/exercises.json`)
+- `src/services/hrSensor.js` — Infers chest strap vs. wrist heart rate sensor from TCX signal texture, cached in `src/data/hrSensor.json`
 
 **Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler.
 
@@ -75,6 +76,7 @@ There are no build steps, no linter, and no test suite. The app requires a `.env
 - **Dual exercise sources:** Sync combines Pull Notifications (transaction flow) with the Training Data API (`/v3/exercises`) and deduplicates by ID. The `/api/exercises/:id/tcx` and `/gpx` routes serve from server-side cache first, then fall back to the Training Data API
 - **Token never expires:** Single OAuth flow, token persisted server-side as JSON file
 - **CSS theme:** Dark background (#0D0D0D), neon-green accent (#CEFF00), defined in `public/css/variables.css`
+- **Heart rate sensor inference:** Since no field records which sensor was used, `hrSensor.js` classifies it from the texture of the 1 Hz series — a chest strap keeps beat-to-beat detail, wrist optical is heavily filtered and repeats values. Classification hangs off `writeXmlCache()` so every newly cached TCX is labelled; `node scripts/classify-sensors.js` rebuilds the whole map. The label rides along on the exercises endpoints and `sync.js` copies it into IndexedDB. **It is calibrated on 53 known chest strap runs and exactly one confirmed wrist run, so it is indicative only** — read `smoothness` rather than `label`, and recalibrate the constants marked `RECALIBRATE_ME` once more runs have a confirmed sensor
 
 ## Polar AccessLink API
 
@@ -90,6 +92,7 @@ The Polar API has two separate data access paths that behave very differently:
 - IndexedDB key paths cannot contain hyphens. Polar API returns fields like `start-time` and `detailed-sport-info` — access these with bracket notation, never use them as IndexedDB indexes
 - Polar's exercise transaction returns 204 when there's no new data. A committed transaction's data won't appear again — always rely on locally cached exercises
 - **Never use `/v3/exercises/{id}/tcx` during a transaction** — that's the Training Data API endpoint. During a transaction, use `{exerciseUrl}/tcx` where `exerciseUrl` is the full transaction URL like `https://www.polaraccesslink.com/v3/users/{userId}/exercise-transactions/{transactionId}/exercises/{exerciseId}`
-- The `src/data/` directory is gitignored (contains `token.json`, `exercises.json`, `tcx/`, `gpx/`)
+- The `src/data/` directory is gitignored (contains `token.json`, `exercises.json`, `hrSensor.json`, `tcx/`, `gpx/`)
+- Polar's `device` / `device-id` name the **recording** device, not the heart rate source. A Pacer run with a paired H10 and one on wrist optical are labelled identically, and `SensorState` in the TCX is `Present` in all but 8 of 111k samples — it carries no information
 - Leaflet is loaded dynamically from CDN only when GPS data exists in the exercise
 - Frontend caches parsed detail data (`detailData`) as a property on exercise objects in IndexedDB. An `{ unavailable: true, checkedAt }` marker with a TTL prevents repeated fetches for exercises without detail data

@@ -5,6 +5,7 @@ import { tokenCheck } from '../middleware/tokenCheck.js';
 import { getExercises, polarFetch, polarFetchRaw } from '../services/polarApi.js';
 import { readCache, appendToCache } from '../services/exerciseCache.js';
 import { readXmlCache, writeXmlCache } from '../services/xmlCache.js';
+import { withHrSensor } from '../services/hrSensor.js';
 
 const router = Router();
 
@@ -33,7 +34,7 @@ router.get('/exercises', async (req, res) => {
 
     // Return all cached exercises (combines both sources)
     const all = await readCache();
-    res.json(all.length > 0 ? all : exercises);
+    res.json(await withHrSensor(all.length > 0 ? all : exercises));
   } catch (err) {
     console.error('Exercises fetch error:', err.message);
     res.status(502).json({ error: 'Failed to fetch exercises from Polar' });
@@ -43,7 +44,7 @@ router.get('/exercises', async (req, res) => {
 router.get('/exercises/cached', async (req, res) => {
   try {
     const cached = await readCache();
-    res.json(cached);
+    res.json(await withHrSensor(cached));
   } catch (err) {
     console.error('Cache read error:', err.message);
     res.json([]);
