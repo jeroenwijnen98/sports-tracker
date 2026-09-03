@@ -62,13 +62,7 @@ export async function openRunDetail(exerciseId) {
         </div>
 
         <div id="run-detail-chart-section" class="run-detail-section" style="display:none">
-          <div class="run-detail-chart-toggle" id="chart-toggle">
-            <button class="run-detail-chart-toggle-btn active" data-mode="pace">Tempo</button>
-            <button class="run-detail-chart-toggle-btn" data-mode="hr">Hartslag</button>
-          </div>
-          <div class="run-detail-chart-wrap">
-            <canvas id="run-detail-chart"></canvas>
-          </div>
+          ${chartMarkup()}
         </div>
 
         <div id="run-detail-laps-section" class="run-detail-section" style="display:none">
@@ -137,15 +131,7 @@ function showRetryButton(exerciseId) {
 
     const detail = await retryDetailData(exerciseId);
     if (detail) {
-      chartSection.innerHTML = `
-        <div class="run-detail-chart-toggle" id="chart-toggle">
-          <button class="run-detail-chart-toggle-btn active" data-mode="pace">Tempo</button>
-          <button class="run-detail-chart-toggle-btn" data-mode="hr">Hartslag</button>
-        </div>
-        <div class="run-detail-chart-wrap">
-          <canvas id="run-detail-chart"></canvas>
-        </div>
-      `;
+      chartSection.innerHTML = chartMarkup();
       renderChart(detail);
       renderLaps(detail);
       renderMap(detail);
@@ -167,206 +153,356 @@ export function closeRunDetail() {
 
 /* ── Chart ── */
 
-let currentChartMode = 'pace';
-let chartDetail = null;
+const PACE_COLOR = '#CEFF00';
+const HR_COLOR = '#FF4D6D';
+
+let chartMode = 'pace';
+let chartSeries = null;
+
+function chartMarkup() {
+  return `
+    <div class="run-detail-chart-head">
+      <div class="run-detail-chart-toggle" id="chart-toggle">
+        <button class="run-detail-chart-toggle-btn active" data-mode="pace">Tempo</button>
+        <button class="run-detail-chart-toggle-btn" data-mode="hr">Hartslag</button>
+        <button class="run-detail-chart-toggle-btn" data-mode="both">Beide</button>
+      </div>
+      <div class="run-detail-chart-legend" id="chart-legend" style="display:none">
+        <span><i style="background:${PACE_COLOR}"></i>Tempo</span>
+        <span><i style="background:${HR_COLOR}"></i>Hartslag</span>
+      </div>
+      <div class="run-detail-chart-readout" id="chart-readout"></div>
+    </div>
+    <div class="run-detail-chart-wrap">
+      <canvas id="run-detail-chart"></canvas>
+      <canvas id="run-detail-chart-cursor" class="run-detail-chart-cursor"></canvas>
+    </div>
+  `;
+}
 
 function renderChart(detail) {
-  chartDetail = detail;
+  chartSeries = buildChartSeries(detail);
+  if (!chartSeries) return;
 
-  const hasData = (detail.hasSpeed || detail.hasHeartRate) && detail.allTrackpoints.length > 0;
-  if (!hasData) return;
-
-  // If no speed, default to HR
-  if (!detail.hasSpeed && detail.hasHeartRate) currentChartMode = 'hr';
-  else currentChartMode = 'pace';
+  const { hasPace, hasHr } = chartSeries;
+  const modes = [];
+  if (hasPace) modes.push('pace');
+  if (hasHr) modes.push('hr');
+  if (hasPace && hasHr) modes.push('both');
+  chartMode = modes[0];
 
   const section = document.getElementById('run-detail-chart-section');
   section.style.display = '';
 
-  // Hide toggle buttons if only one mode
   const toggle = document.getElementById('chart-toggle');
-  if (!detail.hasSpeed || !detail.hasHeartRate) {
-    toggle.style.display = 'none';
-  } else {
-    toggle.querySelectorAll('.run-detail-chart-toggle-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.mode === currentChartMode);
-      btn.addEventListener('click', () => {
-        currentChartMode = btn.dataset.mode;
-        toggle.querySelectorAll('.run-detail-chart-toggle-btn').forEach((b) =>
-          b.classList.toggle('active', b.dataset.mode === currentChartMode)
-        );
-        drawChart();
-      });
+  toggle.style.display = modes.length > 1 ? '' : 'none';
+  toggle.querySelectorAll('.run-detail-chart-toggle-btn').forEach((btn) => {
+    const available = modes.includes(btn.dataset.mode);
+    btn.style.display = available ? '' : 'none';
+    btn.classList.toggle('active', btn.dataset.mode === chartMode);
+    if (!available) return;
+    btn.addEventListener('click', () => {
+      chartMode = btn.dataset.mode;
+      toggle.querySelectorAll('.run-detail-chart-toggle-btn').forEach((b) =>
+        b.classList.toggle('active', b.dataset.mode === chartMode)
+      );
+      drawChart();
+      clearChartCursor();
     });
-  }
+  });
 
   drawChart();
+  attachChartScrub();
 }
+
+/**
+ * Flatten trackpoints into { d, pace, hr } samples.
+ * Polar doesn't always record <Speed>, so pace falls back to distance/time deltas.
+ */
+function buildChartSeries(detail) {
+  let points = (detail.allTrackpoints || [])
+    .filter((tp) => tp.distance !== null && tp.time)
+    .map((tp, i, arr) => ({
+      d: tp.distance,
+      t: (Date.parse(tp.time) - Date.parse(arr[0].time)) / 1000,
+      hr: tp.heartRate,
+      speed: tp.speed > 0 ? tp.speed : null,
+    }));
+
+  if (points.length < 2) return null;
+
+  const window = 4;
+  for (let i = 0; i < points.length; i++) {
+    if (points[i].speed !== null) continue;
+    const a = points[Math.max(0, i - window)];
+    const b = points[Math.min(points.length - 1, i + window)];
+    points[i].speed = b.t > a.t ? (b.d - a.d) / (b.t - a.t) : null;
+  }
+
+  // Downsample to ~400 samples, then roll a moving average over both metrics.
+  if (points.length > 400) {
+    const step = points.length / 400;
+    points = Array.from({ length: 400 }, (_, i) => points[Math.floor(i * step)]);
+  }
+  points = rollingAverage(points, 'speed', 6);
+  points = rollingAverage(points, 'hr', 4);
+
+  const samples = points.map((p) => ({
+    d: p.d,
+    hr: p.hr,
+    // min/km; standing still (< 1 m/s) leaves a gap instead of a spike
+    pace: p.speed > 1 ? Math.min(1000 / 60 / p.speed, 15) : null,
+  }));
+
+  const paces = samples.map((p) => p.pace).filter((v) => v !== null);
+  const hrs = samples.map((p) => p.hr).filter((v) => v);
+
+  return {
+    samples,
+    maxD: samples[samples.length - 1].d || 1,
+    hasPace: paces.length > 0,
+    hasHr: hrs.length > 0,
+    paceMin: Math.min(...paces),
+    paceMax: Math.max(...paces),
+    hrMin: Math.min(...hrs),
+    hrMax: Math.max(...hrs),
+  };
+}
+
+function rollingAverage(points, key, window) {
+  return points.map((p, i) => {
+    let sum = 0;
+    let count = 0;
+    for (let j = Math.max(0, i - window); j <= Math.min(points.length - 1, i + window); j++) {
+      if (points[j][key] != null) {
+        sum += points[j][key];
+        count++;
+      }
+    }
+    return { ...p, [key]: count ? sum / count : null };
+  });
+}
+
+/** Current chart geometry, kept around so the scrub cursor can reuse it. */
+let chartGeometry = null;
 
 function drawChart() {
   const canvas = document.getElementById('run-detail-chart');
-  if (!canvas || !chartDetail) return;
+  if (!canvas || !chartSeries) return;
 
-  const ctx = canvas.getContext('2d');
-  const dpr = window.devicePixelRatio || 1;
-  const rect = canvas.parentElement.getBoundingClientRect();
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
-  canvas.style.width = rect.width + 'px';
-  canvas.style.height = rect.height + 'px';
-  ctx.scale(dpr, dpr);
+  const legend = document.getElementById('chart-legend');
+  if (legend) legend.style.display = chartMode === 'both' ? '' : 'none';
 
-  const w = rect.width;
-  const h = rect.height;
-  const pad = { top: 20, right: 10, bottom: 24, left: 40 };
-
-  ctx.clearRect(0, 0, w, h);
-
-  // Get data points
-  let points = chartDetail.allTrackpoints
-    .filter((tp) => tp.distance !== null)
-    .map((tp) => ({
-      distance: tp.distance,
-      value: currentChartMode === 'pace' ? tp.speed : tp.heartRate,
-    }))
-    .filter((p) => p.value !== null && p.value > 0);
-
-  if (points.length === 0) return;
-
-  // Downsample to ~500 points
-  if (points.length > 500) {
-    const step = points.length / 500;
-    const sampled = [];
-    for (let i = 0; i < 500; i++) {
-      sampled.push(points[Math.floor(i * step)]);
-    }
-    points = sampled;
-  }
-
-  // Rolling average smoothing (~10 points window)
-  const windowSize = Math.min(10, Math.floor(points.length / 5));
-  if (windowSize > 1) {
-    const smoothed = [];
-    for (let i = 0; i < points.length; i++) {
-      let sum = 0, count = 0;
-      for (let j = Math.max(0, i - windowSize); j <= Math.min(points.length - 1, i + windowSize); j++) {
-        sum += points[j].value;
-        count++;
-      }
-      smoothed.push({ ...points[i], value: sum / count });
-    }
-    points = smoothed;
-  }
-
-  // For pace mode, convert speed (m/s) to pace (min/km) - inverted
-  let values;
-  if (currentChartMode === 'pace') {
-    values = points.map((p) => {
-      const paceMinKm = 1000 / 60 / p.value; // min/km
-      return paceMinKm;
-    });
-  } else {
-    values = points.map((p) => p.value);
-  }
-
-  const maxDist = points[points.length - 1].distance;
-  let minVal = Math.min(...values);
-  let maxVal = Math.max(...values);
-  const range = maxVal - minVal || 1;
-  minVal -= range * 0.05;
-  maxVal += range * 0.05;
-
+  const { ctx, w, h } = chartContext(canvas);
+  const showPace = chartMode === 'pace' || chartMode === 'both';
+  const showHr = chartMode === 'hr' || chartMode === 'both';
+  const pad = { top: 16, right: chartMode === 'both' ? 42 : 12, bottom: 22, left: 42 };
   const plotW = w - pad.left - pad.right;
   const plotH = h - pad.top - pad.bottom;
 
-  const xScale = (d) => pad.left + (d / maxDist) * plotW;
-  // For pace, invert: lower pace = faster = higher on chart
-  const yScale = (v) => {
-    if (currentChartMode === 'pace') {
-      return pad.top + ((v - minVal) / (maxVal - minVal)) * plotH;
-    }
-    return pad.top + plotH - ((v - minVal) / (maxVal - minVal)) * plotH;
-  };
+  const [paceLo, paceHi] = axisBounds(chartSeries.paceMin, chartSeries.paceMax);
+  const [hrLo, hrHi] = axisBounds(chartSeries.hrMin, chartSeries.hrMax);
 
-  // Grid lines
-  ctx.strokeStyle = '#2A2A2A';
+  const xScale = (d) => pad.left + (d / chartSeries.maxD) * plotW;
+  // Pace is inverted: a lower min/km is faster, so it sits higher on the chart.
+  const paceScale = (v) => pad.top + ((v - paceLo) / (paceHi - paceLo)) * plotH;
+  const hrScale = (v) => pad.top + plotH - ((v - hrLo) / (hrHi - hrLo)) * plotH;
+
+  drawGrid(ctx, w, pad, plotH);
+
+  if (showPace) {
+    drawAxisLabels(ctx, pad, plotH, 'left', (i) => formatPaceValue(paceLo + ((paceHi - paceLo) / 4) * i), PACE_COLOR);
+  } else {
+    drawAxisLabels(ctx, pad, plotH, 'left', (i) => Math.round(hrHi - ((hrHi - hrLo) / 4) * i), '#666666');
+  }
+  if (chartMode === 'both') {
+    drawAxisLabels(ctx, pad, plotH, 'right', (i) => Math.round(hrHi - ((hrHi - hrLo) / 4) * i), HR_COLOR, plotW);
+  }
+
+  drawDistanceLabels(ctx, h, pad, xScale);
+
+  const solo = chartMode !== 'both';
+  if (showHr) {
+    drawMetric(ctx, xScale, hrScale, 'hr', HR_COLOR, solo ? 2 : 1.75, solo ? pad.top + plotH : null, pad.top);
+  }
+  if (showPace) {
+    drawMetric(ctx, xScale, paceScale, 'pace', PACE_COLOR, solo ? 2 : 2.25, solo ? pad.top + plotH : null, pad.top);
+  }
+
+  chartGeometry = { xScale, paceScale, hrScale, pad, plotH, showPace, showHr };
+}
+
+function chartContext(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = Math.max(1, rect.width * dpr);
+  canvas.height = Math.max(1, rect.height * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, rect.width, rect.height);
+  return { ctx, w: rect.width, h: rect.height };
+}
+
+function axisBounds(min, max) {
+  const range = max - min || 1;
+  return [min - range * 0.08, max + range * 0.08];
+}
+
+function drawGrid(ctx, w, pad, plotH) {
+  ctx.strokeStyle = '#242424';
   ctx.lineWidth = 1;
-  const gridCount = 4;
-  for (let i = 0; i <= gridCount; i++) {
-    const y = pad.top + (plotH / gridCount) * i;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (plotH / 4) * i;
     ctx.beginPath();
     ctx.moveTo(pad.left, y);
     ctx.lineTo(w - pad.right, y);
     ctx.stroke();
   }
+}
 
-  // Y-axis labels
+function drawAxisLabels(ctx, pad, plotH, side, valueAt, color, plotW = 0) {
+  ctx.fillStyle = color;
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = side === 'left' ? 'right' : 'left';
+  ctx.textBaseline = 'middle';
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.top + (plotH / 4) * i;
+    ctx.fillText(valueAt(i), side === 'left' ? pad.left - 6 : pad.left + plotW + 6, y);
+  }
+}
+
+function drawDistanceLabels(ctx, h, pad, xScale) {
   ctx.fillStyle = '#666666';
   ctx.font = '11px -apple-system, sans-serif';
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  for (let i = 0; i <= gridCount; i++) {
-    const y = pad.top + (plotH / gridCount) * i;
-    let val;
-    if (currentChartMode === 'pace') {
-      val = minVal + ((maxVal - minVal) / gridCount) * i;
-      const min = Math.floor(val);
-      const sec = Math.round((val - min) * 60);
-      ctx.fillText(`${min}:${String(sec).padStart(2, '0')}`, pad.left - 6, y);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  const kmMax = chartSeries.maxD / 1000;
+  const step = kmMax <= 3 ? 0.5 : kmMax <= 8 ? 1 : kmMax <= 20 ? 2 : 5;
+  for (let km = 0; km <= kmMax + 1e-6; km += step) {
+    ctx.fillText(kmMax <= 3 ? km.toFixed(1) : String(km), xScale(km * 1000), h - pad.bottom + 5);
+  }
+}
+
+/** Draw one metric as a line, splitting on gaps; `areaBase` adds a gradient fill. */
+function drawMetric(ctx, xScale, yScale, key, color, lineWidth, areaBase, top) {
+  const segments = [];
+  let current = [];
+  for (const sample of chartSeries.samples) {
+    if (sample[key] == null) {
+      if (current.length) segments.push(current);
+      current = [];
     } else {
-      val = maxVal - ((maxVal - minVal) / gridCount) * i;
-      ctx.fillText(Math.round(val), pad.left - 6, y);
+      current.push(sample);
+    }
+  }
+  if (current.length) segments.push(current);
+
+  if (areaBase !== null) {
+    const gradient = ctx.createLinearGradient(0, top, 0, areaBase);
+    gradient.addColorStop(0, withAlpha(color, 0.28));
+    gradient.addColorStop(1, withAlpha(color, 0.02));
+    ctx.fillStyle = gradient;
+    for (const segment of segments) {
+      ctx.beginPath();
+      ctx.moveTo(xScale(segment[0].d), areaBase);
+      for (const sample of segment) ctx.lineTo(xScale(sample.d), yScale(sample[key]));
+      ctx.lineTo(xScale(segment[segment.length - 1].d), areaBase);
+      ctx.closePath();
+      ctx.fill();
     }
   }
 
-  // X-axis labels (distance in km)
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  const kmMax = maxDist / 1000;
-  const kmStep = niceStep(kmMax, 5);
-  for (let km = 0; km <= kmMax; km += kmStep) {
-    const x = xScale(km * 1000);
-    ctx.fillText(`${Math.round(km)}`, x, h - pad.bottom + 6);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineJoin = 'round';
+  for (const segment of segments) {
+    ctx.beginPath();
+    segment.forEach((sample, i) => {
+      const x = xScale(sample.d);
+      const y = yScale(sample[key]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
   }
-
-  // Area fill
-  const gradient = ctx.createLinearGradient(0, pad.top, 0, h - pad.bottom);
-  gradient.addColorStop(0, 'rgba(206, 255, 0, 0.25)');
-  gradient.addColorStop(1, 'rgba(206, 255, 0, 0.02)');
-
-  ctx.beginPath();
-  ctx.moveTo(xScale(points[0].distance), currentChartMode === 'pace' ? pad.top + plotH : h - pad.bottom);
-  for (const p of points) {
-    ctx.lineTo(xScale(p.distance), yScale(currentChartMode === 'pace' ? 1000 / 60 / p.value : p.value));
-  }
-  ctx.lineTo(xScale(points[points.length - 1].distance), currentChartMode === 'pace' ? pad.top + plotH : h - pad.bottom);
-  ctx.closePath();
-  ctx.fillStyle = gradient;
-  ctx.fill();
-
-  // Line
-  ctx.beginPath();
-  for (let i = 0; i < points.length; i++) {
-    const x = xScale(points[i].distance);
-    const y = yScale(values[i]);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.strokeStyle = '#CEFF00';
-  ctx.lineWidth = 2;
-  ctx.stroke();
 }
 
-function niceStep(max, targetTicks) {
-  const rough = max / targetTicks;
-  const pow = Math.pow(10, Math.floor(Math.log10(rough)));
-  const normalized = rough / pow;
-  let step;
-  if (normalized <= 1) step = 1;
-  else if (normalized <= 2) step = 2;
-  else if (normalized <= 5) step = 5;
-  else step = 10;
-  return step * pow;
+function withAlpha(hex, alpha) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+function formatPaceValue(minPerKm) {
+  const min = Math.floor(minPerKm);
+  const sec = Math.round((minPerKm - min) * 60);
+  return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
+/* ── Chart scrub ── */
+
+function attachChartScrub() {
+  const canvas = document.getElementById('run-detail-chart');
+  const wrap = canvas?.parentElement;
+  if (!wrap) return;
+
+  const move = (e) => {
+    const touch = e.touches?.[0];
+    const rect = canvas.getBoundingClientRect();
+    const frac = Math.max(0, Math.min(1, ((touch || e).clientX - rect.left) / rect.width));
+    drawChartCursor(frac);
+    if (touch) e.preventDefault();
+  };
+
+  wrap.addEventListener('mousemove', move);
+  wrap.addEventListener('mouseleave', clearChartCursor);
+  wrap.addEventListener('touchstart', move, { passive: false });
+  wrap.addEventListener('touchmove', move, { passive: false });
+  wrap.addEventListener('touchend', clearChartCursor);
+}
+
+function drawChartCursor(frac) {
+  const canvas = document.getElementById('run-detail-chart-cursor');
+  if (!canvas || !chartGeometry || !chartSeries) return;
+
+  const target = frac * chartSeries.maxD;
+  let sample = chartSeries.samples[0];
+  for (const candidate of chartSeries.samples) {
+    if (Math.abs(candidate.d - target) < Math.abs(sample.d - target)) sample = candidate;
+  }
+
+  const { ctx } = chartContext(canvas);
+  const { xScale, paceScale, hrScale, pad, plotH, showPace, showHr } = chartGeometry;
+  const x = xScale(sample.d);
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x, pad.top);
+  ctx.lineTo(x, pad.top + plotH);
+  ctx.stroke();
+
+  const dots = [];
+  if (showPace && sample.pace !== null) dots.push([paceScale(sample.pace), PACE_COLOR]);
+  if (showHr && sample.hr) dots.push([hrScale(sample.hr), HR_COLOR]);
+  for (const [y, color] of dots) {
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  const parts = [`${(sample.d / 1000).toFixed(2)} km`];
+  if (showPace) parts.push(sample.pace !== null ? `${formatPaceValue(sample.pace)} /km` : '--:-- /km');
+  if (showHr) parts.push(sample.hr ? `${Math.round(sample.hr)} bpm` : '-- bpm');
+  const readout = document.getElementById('chart-readout');
+  if (readout) readout.textContent = parts.join(' · ');
+}
+
+function clearChartCursor() {
+  const canvas = document.getElementById('run-detail-chart-cursor');
+  if (canvas) chartContext(canvas);
+  const readout = document.getElementById('chart-readout');
+  if (readout) readout.textContent = '';
 }
 
 /* ── Laps ── */
