@@ -89,7 +89,7 @@ importFileInput.addEventListener('change', async (e) => {
 
   importBtn.classList.add('syncing');
   try {
-    const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING'];
+    const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING'];
     const imported = [];
     let duplicates = 0;
 

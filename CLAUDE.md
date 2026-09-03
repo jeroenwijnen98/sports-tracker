@@ -68,7 +68,7 @@ There are no build steps, no linter, and no test suite. The app requires a `.env
 
 ## Key Design Decisions
 
-- **Sport filter:** Only `RUNNING`, `TRAIL_RUNNING`, `TREADMILL_RUNNING` are synced/shown
+- **Sport filter:** Only `RUNNING`, `TRAIL_RUNNING`, `TREADMILL_RUNNING`, `ULTRARUNNING_RUNNING` are synced/shown
 - **Shoe km tracking:** `totalKm = initialKm + sum(assigned exercise distances)`. Recalculated on sync and shoe edit
 - **Polar API constraint:** The transaction flow (POST/GET/PUT) means each exercise can only be fetched once — local IndexedDB storage is the permanent record
 - **Eager TCX/GPX caching:** TCX and GPX are fetched and saved to disk during the sync transaction (before commit), because they become permanently inaccessible after commit. The server-side cache in `src/data/tcx/` and `src/data/gpx/` is the permanent record for detail data

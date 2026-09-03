@@ -9,7 +9,7 @@ import { getToken } from '../src/services/tokenStore.js';
 import { getExercises } from '../src/services/polarApi.js';
 import { appendToCache, readCache } from '../src/services/exerciseCache.js';
 
-const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING'];
+const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING'];
 
 async function main() {
   const token = await getToken();

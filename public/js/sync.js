@@ -1,7 +1,7 @@
 import { getExercises, getCachedExercises } from './api.js';
 import { getAll, put, putMany, get } from './db.js';
 
-const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING'];
+const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING'];
 
 /**
  * Sync exercises from Polar API + server-side cache into IndexedDB.

@@ -60,6 +60,7 @@ export function sportLabel(sport) {
     RUNNING: 'Run',
     TRAIL_RUNNING: 'Trail Run',
     TREADMILL_RUNNING: 'Treadmill',
+    ULTRARUNNING_RUNNING: 'Ultra Run',
   };
   return map[sport] || sport || 'Run';
 }
