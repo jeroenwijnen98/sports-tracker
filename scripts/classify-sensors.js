@@ -13,6 +13,7 @@ import { classifyHrSensor, writeSensorCache } from '../src/services/hrSensor.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TCX_DIR = join(__dirname, '..', 'src', 'data', 'tcx');
+const TRUTH_PATH = join(__dirname, '..', 'src', 'services', 'hrSensorTruth.json');
 
 async function main() {
   const verbose = process.argv.includes('--verbose');
@@ -54,6 +55,32 @@ async function main() {
   console.log(`[sensors]   unknown     ${counts.unknown}`);
   if (skipped > 0) {
     console.log(`[sensors]   skipped     ${skipped} (too short or no usable heart rate)`);
+  }
+
+  await reportAgainstTruth(map);
+}
+
+/**
+ * Scores the classifier against the runs whose sensor is known first-hand.
+ * The set is tiny, so this is a sanity check on the thresholds rather than an
+ * error rate — an 'unknown' on a confirmed run is a miss, not a mistake.
+ */
+async function reportAgainstTruth(map) {
+  const { runs } = JSON.parse(await readFile(TRUTH_PATH, 'utf-8'));
+  const ids = Object.keys(runs);
+  console.log(`[sensors] Validation set (${ids.length} runs with a confirmed sensor):`);
+
+  for (const id of ids.sort((a, b) => runs[a].date.localeCompare(runs[b].date))) {
+    const { date, sensor } = runs[id];
+    const got = map[id];
+    if (!got) {
+      console.log(`[sensors]   ${date}  ${sensor.padEnd(11)} -> no cached TCX`);
+      continue;
+    }
+    const verdict = got.label === sensor ? 'correct' : got.label === 'unknown' ? 'undecided' : 'WRONG';
+    console.log(
+      `[sensors]   ${date}  ${sensor.padEnd(11)} -> ${got.label.padEnd(11)} smoothness ${String(got.smoothness).padStart(5)}  ${verdict}`
+    );
   }
 }
 

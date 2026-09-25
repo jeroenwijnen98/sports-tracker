@@ -19,13 +19,20 @@ const CACHE_PATH = join(__dirname, '..', 'data', 'hrSensor.json');
  *
  * CALIBRATION AND ITS LIMITS. The reference distribution below comes from 53
  * Polar Beat exercises, which are necessarily chest strap recordings because
- * the phone app has no sensor of its own. The only confirmed wrist recording is
- * a single run (2026-09-03), which scores at the 98th percentile of that strap
- * distribution — the features point the right way, but one positive example
- * cannot establish an error rate. At the threshold used here, 21% of the Pacer
- * exercises come out as wrist, spread over the years in a pattern that does not
- * look like a clean switch. Treat a per-run label as an indication, not a fact,
- * and read `smoothness` rather than `label` when it matters.
+ * the phone app has no sensor of its own. Beyond those, only two runs have a
+ * sensor confirmed first-hand — they live in hrSensorTruth.json, and
+ * `node scripts/classify-sensors.js` scores against them:
+ *
+ *   2026-09-03  wrist        smoothness 1.45  called wrist
+ *   2026-09-11  H10 strap    smoothness 0.80  called unknown
+ *
+ * So the classifier has not yet been wrong on a known run, but the strap run
+ * lands only 0.22 below WRIST_THRESHOLD — the margin against a false wrist
+ * call is thin, and two examples cannot establish an error rate. At the
+ * threshold used here, 21% of the Pacer exercises come out as wrist, spread
+ * over the years in a pattern that does not look like a clean switch. Treat a
+ * per-run label as an indication, not a fact, and read `smoothness` rather
+ * than `label` when it matters.
  *
  * Recalibrate RECALIBRATE_ME below once more runs have a confirmed sensor.
  */

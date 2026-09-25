@@ -1,0 +1,7 @@
+{
+  "comment": "Runs whose heart rate source is known first-hand, not inferred. The validation set for classifyHrSensor — keep it append-only and only add a run you actually remember. scripts/classify-sensors.js scores against it.",
+  "runs": {
+    "506516283": { "date": "2026-09-03", "sensor": "wrist", "note": "Pacer wrist optical, no strap worn" },
+    "508142234": { "date": "2026-09-11", "sensor": "chest-strap", "note": "H10 strap paired to the Pacer" }
+  }
+}
