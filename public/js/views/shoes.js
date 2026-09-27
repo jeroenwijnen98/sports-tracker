@@ -3,6 +3,7 @@ import { createShoeCard } from '../components/shoeCard.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 import { recalcShoeKm } from '../sync.js';
+import { escapeHtml } from '../utils/html.js';
 
 const panel = document.getElementById('tab-shoes');
 
@@ -72,11 +73,11 @@ function openShoeModal(shoe = null) {
     <form id="shoe-form" class="modal-body">
       <div class="form-group">
         <label for="shoe-name">Naam</label>
-        <input type="text" id="shoe-name" placeholder="bijv. Nike Pegasus 41" value="${escapeAttr(shoe?.name || '')}" required>
+        <input type="text" id="shoe-name" placeholder="bijv. Nike Pegasus 41" value="${escapeHtml(shoe?.name || '')}" required>
       </div>
       <div class="form-group">
         <label for="shoe-brand">Merk</label>
-        <input type="text" id="shoe-brand" placeholder="bijv. Nike" value="${escapeAttr(shoe?.brand || '')}">
+        <input type="text" id="shoe-brand" placeholder="bijv. Nike" value="${escapeHtml(shoe?.brand || '')}">
       </div>
       <div class="form-group">
         <label for="shoe-initial-km">Start km (optioneel)</label>
@@ -150,8 +151,4 @@ async function setDefaultShoe(shoe) {
   }
   showToast(`${shoe.name} is nu de standaard schoen`, 'success');
   await renderShoes();
-}
-
-function escapeAttr(str) {
-  return str.replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

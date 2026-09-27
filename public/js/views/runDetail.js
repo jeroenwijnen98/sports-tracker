@@ -5,6 +5,7 @@ import { deleteExercise } from '../api.js';
 import { renderActivities } from './activities.js';
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
 import { formatDate, formatTime } from '../utils/date.js';
+import { escapeHtml } from '../utils/html.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
@@ -32,7 +33,7 @@ export async function openRunDetail(exerciseId) {
         </button>
         <div class="run-detail-topbar-info">
           <span class="run-detail-sport">${sportLabel(sport)}</span>
-          <span class="run-detail-date">${formatDate(startTime)} · ${formatTime(startTime)}${exercise.device ? ` · ${exercise.device}` : ''}</span>
+          <span class="run-detail-date">${formatDate(startTime)} · ${formatTime(startTime)}${exercise.device ? ` · ${escapeHtml(exercise.device)}` : ''}</span>
         </div>
       </div>
 

@@ -1,5 +1,5 @@
 import { getAuthStatus, logout, importExerciseTcx, importExerciseJson } from './api.js';
-import { syncExercises, recalcAllShoeKm } from './sync.js';
+import { syncExercises, recalcAllShoeKm, assignDefaultShoe } from './sync.js';
 import { backgroundFetchDetails } from './services/detailData.js';
 import { getAll, putMany, put } from './db.js';
 import { renderActivities } from './views/activities.js';
@@ -7,6 +7,7 @@ import { renderActivity } from './views/activity.js';
 import { renderShoes } from './views/shoes.js';
 import { showToast } from './components/toast.js';
 import { markOverlaps } from './utils/overlap.js';
+import { isRunningSport } from './utils/sports.js';
 import { keepSessionAlive } from './session.js';
 
 const authScreen = document.getElementById('auth-screen');
@@ -85,7 +86,6 @@ importFileInput.addEventListener('change', async (e) => {
 
   importBtn.classList.add('syncing');
   try {
-    const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING'];
     let imported = [];
     let duplicates = 0;
 
@@ -124,7 +124,7 @@ importFileInput.addEventListener('change', async (e) => {
         }
         if (exercise._duplicate) {
           duplicates++;
-        } else if (RUNNING_SPORTS.includes(exercise['detailed-sport-info'])) {
+        } else if (isRunningSport(exercise)) {
           // Resolve device name
           if (exercise.device && deviceMap[exercise.device]) {
             exercise.device = deviceMap[exercise.device];
@@ -148,14 +148,7 @@ importFileInput.addEventListener('change', async (e) => {
     }
 
     if (imported.length > 0) {
-      // Auto-assign default shoe
-      const shoes = await getAll('shoes');
-      const defaultShoe = shoes.find((s) => s.isDefault);
-      if (defaultShoe) {
-        for (const ex of imported) {
-          if (!ex.shoeId) ex.shoeId = defaultShoe.id;
-        }
-      }
+      await assignDefaultShoe(imported);
 
       await putMany('exercises', imported);
       await recalcAllShoeKm();

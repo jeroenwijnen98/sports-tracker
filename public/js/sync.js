@@ -1,7 +1,6 @@
 import { getExercises, getCachedExercises } from './api.js';
 import { getAll, put, putMany, get } from './db.js';
-
-const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING'];
+import { isRunningSport } from './utils/sports.js';
 
 /**
  * Sync exercises from Polar API + server-side cache into IndexedDB.
@@ -25,9 +24,7 @@ export async function syncExercises() {
   }
 
   // Filter to running sports only
-  const runningExercises = merged.filter((ex) =>
-    RUNNING_SPORTS.includes(ex['detailed-sport-info'])
-  );
+  const runningExercises = merged.filter(isRunningSport);
 
   if (runningExercises.length === 0) {
     const existing = await getAll('exercises');
@@ -80,9 +77,10 @@ async function backfillHrSensor(incoming, existing) {
 }
 
 /**
- * Assign the default shoe ID to exercises that don't have one.
+ * Assign the default shoe ID to exercises that don't have one. Mutates them in
+ * place; the caller saves them.
  */
-async function assignDefaultShoe(exercises) {
+export async function assignDefaultShoe(exercises) {
   const shoes = await getAll('shoes');
   const defaultShoe = shoes.find((s) => s.isDefault);
   if (!defaultShoe) return;

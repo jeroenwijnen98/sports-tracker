@@ -6,6 +6,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { RUNNING_SPORTS } from '../../public/js/utils/sports.js';
 
 const TCX_SPORT_MAP = {
   Running: 'RUNNING',
@@ -14,20 +15,10 @@ const TCX_SPORT_MAP = {
 };
 
 const POLAR_SPORT_TO_TCX = {
-  RUNNING: 'Running',
-  TRAIL_RUNNING: 'Running',
-  TREADMILL_RUNNING: 'Running',
-  ULTRARUNNING_RUNNING: 'Running',
+  ...Object.fromEntries(RUNNING_SPORTS.map((sport) => [sport, 'Running'])),
   CYCLING: 'Biking',
   ROAD_BIKING: 'Biking',
   MOUNTAIN_BIKING: 'Biking',
-};
-
-const POLAR_SPORT_TO_DETAILED = {
-  RUNNING: 'RUNNING',
-  TRAIL_RUNNING: 'TRAIL_RUNNING',
-  TREADMILL_RUNNING: 'TREADMILL_RUNNING',
-  ULTRARUNNING_RUNNING: 'ULTRARUNNING_RUNNING',
 };
 
 function escapeXml(s) {
@@ -240,13 +231,13 @@ function importId(key) {
  */
 export function polarJsonToExercise(session) {
   const ex = session.exercises[0];
-  const sport = ex.sport || 'OTHER';
   const startTime = ex.startTime;
 
   return {
     id: importId(startTime),
     'start-time': startTime,
-    'detailed-sport-info': POLAR_SPORT_TO_DETAILED[sport] || sport,
+    // The export uses the same sport names as AccessLink, so it passes through.
+    'detailed-sport-info': ex.sport || 'OTHER',
     duration: ex.duration,
     distance: Math.round(ex.distance || 0),
     calories: ex.kiloCalories || undefined,

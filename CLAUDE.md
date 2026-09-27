@@ -48,7 +48,7 @@ npm test                # node --test 'test/**/*.test.js'
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
 The tests cover pure logic only (import converters, overlap, heart rate sensor
-classifier, formatters) plus the exercise cache against a temp directory — no
+classifier, formatters, running sports, HTML escaping) plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
 
@@ -68,9 +68,9 @@ their `smoothness` and `label`, so update it when recalibrating.
 
 - `server.js` — Entry point, mounts routes and serves `public/` as static files
 - `src/routes/auth.js` — OAuth2 flow: `/auth/login`, `/auth/callback`, `/auth/status`, `/auth/logout`
-- `src/routes/api.js` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (DELETE only, to remove it from the exercise cache), `/api/exercises/:id/tcx`, `/api/exercises/:id/gpx`, plus the `/api/exercises/import` (TCX) and `/import-json` (Polar data export) routes. Protected by `tokenCheck` middleware
+- `src/routes/api.js` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (DELETE only, to remove it from the exercise cache), `/api/exercises/:id/:type` (one handler for `tcx` and `gpx`; any other type falls through to 404), plus the `/api/exercises/import` (TCX) and `/import-json` (Polar data export) routes. Protected by `tokenCheck` middleware
 - `src/services/importConverters.js` — Pure converters behind the import routes: `polarJsonToTcx(session)`, `polarJsonToExercise(session)`, `extractTcxMetadata(xml)`. Both import paths derive the same `import-…` id from the start time
-- `src/services/polarApi.js` — Implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit). Eagerly fetches and caches TCX/GPX during the transaction before commit
+- `src/services/polarApi.js` — `polarRequest(accessToken, pathOrUrl, { method, accept, body })` is the one AccessLink HTTP helper (auth header, Accept, throw on non-2xx); everything that talks to AccessLink goes through it. `XML_ACCEPT` maps `tcx`/`gpx` to their Accept types. Also implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit), eagerly fetching and caching TCX/GPX during the transaction before commit
 - `src/services/polarSync.js` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.js`
 - `src/services/polarAuth.js` — OAuth token exchange with Basic auth, user registration
 - `src/services/tokenStore.js` — Reads/writes `src/data/token.json` (gitignored)
@@ -82,10 +82,13 @@ their `smoothness` and `label`, so update it when recalibrating.
 
 - `public/js/app.js` — Entry point: auth check, tab switching, sync trigger
 - `public/js/db.js` — IndexedDB wrapper (3 stores: `exercises`, `shoes`, `settings`)
-- `public/js/sync.js` — Pulls exercises from backend, filters to running sports, auto-assigns default shoe, recalculates shoe km
+- `public/js/sync.js` — Pulls exercises from backend, filters to running sports, recalculates shoe km. Exports `assignDefaultShoe(exercises)`, which the import handler in `app.js` uses too
+- `public/js/api.js` — Backend calls. `request()` handles 401 (reload) and errors; `{ duplicate: true }` turns a 409 into the existing exercise flagged `_duplicate`, which both import calls use
 - `public/js/views/` — Tab renderers (`activities.js`, `shoes.js`)
 - `public/js/components/` — Reusable UI: `runCard.js`, `shoeCard.js`, `modal.js`, `toast.js`
 - `public/js/utils/` — Formatters for distance, pace, duration, dates
+- `public/js/utils/sports.js` — `RUNNING_SPORTS`, their labels and `isRunningSport()`: the one running sport list, also imported by `src/services/importConverters.js`
+- `public/js/utils/html.js` — `escapeHtml()`, the one escaper for user- or file-controlled strings (shoe name/brand, device) put into markup
 - `public/js/utils/overlap.js` — `markOverlaps(imported, existing)`: marks the phone recording (Polar Beat, or no device) as overlap when a watch recording started within 5 minutes and overlaps in time, both within an import batch and against stored exercises. Pure; the import handler in `app.js` saves the result
 - `public/js/services/detailData.js` — Fetches TCX/GPX from backend, parses them, and caches parsed detail data on exercise objects in IndexedDB
 - `public/js/utils/tcxParser.js` — Parses TCX XML into laps, trackpoints (HR, speed, distance), route coordinates
@@ -94,7 +97,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 
 ## Key Design Decisions
 
-- **Sport filter:** Only `RUNNING`, `TRAIL_RUNNING`, `TREADMILL_RUNNING`, `ULTRARUNNING_RUNNING` are synced/shown
+- **Sport filter:** Only `RUNNING`, `TRAIL_RUNNING`, `TREADMILL_RUNNING`, `ULTRARUNNING_RUNNING` are synced/shown — defined once in `public/js/utils/sports.js`
 - **Shoe km tracking:** `totalKm = initialKm + sum(assigned exercise distances)`. Recalculated on sync and shoe edit
 - **Polar API constraint:** The transaction flow (POST/GET/PUT) means each exercise can only be fetched once — local IndexedDB storage is the permanent record
 - **Eager TCX/GPX caching:** TCX and GPX are fetched and saved to disk during the sync transaction (before commit), because they become permanently inaccessible after commit. The server-side cache in `src/data/tcx/` and `src/data/gpx/` is the permanent record for detail data

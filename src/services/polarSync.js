@@ -1,4 +1,4 @@
-import { getExercises, polarFetch } from './polarApi.js';
+import { getExercises, polarRequest } from './polarApi.js';
 import { appendToCache, readDeletedIds } from './exerciseCache.js';
 
 /**
@@ -26,7 +26,7 @@ export async function syncFromPolar({ accessToken, userId }) {
 
   let fromTrainingApi = 0;
   try {
-    const trainingExercises = await polarFetch(accessToken, '/exercises');
+    const trainingExercises = await (await polarRequest(accessToken, '/exercises')).json();
     fromTrainingApi = trainingExercises.length;
     const addedFromTrainingApi = await appendToCache(notDeleted(trainingExercises));
     if (addedFromTrainingApi > 0) {

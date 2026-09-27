@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import express from 'express';
 import { tokenCheck } from '../middleware/tokenCheck.js';
-import { polarFetchRaw } from '../services/polarApi.js';
+import { polarRequest, XML_ACCEPT } from '../services/polarApi.js';
 import { syncFromPolar } from '../services/polarSync.js';
 import { readCache, appendToCache, removeFromCache } from '../services/exerciseCache.js';
 import { readXmlCache, writeXmlCache } from '../services/xmlCache.js';
@@ -47,47 +47,27 @@ router.delete('/exercises/:id', async (req, res) => {
   }
 });
 
-router.get('/exercises/:id/tcx', async (req, res) => {
-  const id = req.params.id;
+router.get('/exercises/:id/:type', async (req, res, next) => {
+  const { id, type } = req.params;
+  if (!XML_ACCEPT[type]) return next();
 
   // Serve from server-side cache (populated during sync transaction)
-  const cached = await readXmlCache('tcx', id);
+  const cached = await readXmlCache(type, id);
   if (cached) {
     return res.type('application/xml').send(cached);
   }
 
   // Fallback: try Training Data API (works outside transactions)
   try {
-    const xml = await polarFetchRaw(req.accessToken, `/exercises/${id}/tcx`);
-    await writeXmlCache('tcx', id, xml);
-    console.log(`[Polar] Fetched & cached TCX for ${id} via Training Data API`);
+    const xml = await (await polarRequest(req.accessToken, `/exercises/${id}/${type}`, { accept: XML_ACCEPT[type] })).text();
+    await writeXmlCache(type, id, xml);
+    console.log(`[Polar] Fetched & cached ${type.toUpperCase()} for ${id} via Training Data API`);
     return res.type('application/xml').send(xml);
   } catch {
     // Training Data API doesn't have it either
   }
 
-  res.status(404).json({ error: 'TCX data niet beschikbaar.' });
-});
-
-router.get('/exercises/:id/gpx', async (req, res) => {
-  const id = req.params.id;
-
-  const cached = await readXmlCache('gpx', id);
-  if (cached) {
-    return res.type('application/xml').send(cached);
-  }
-
-  // Fallback: try Training Data API
-  try {
-    const xml = await polarFetchRaw(req.accessToken, `/exercises/${id}/gpx`, 'application/gpx+xml');
-    await writeXmlCache('gpx', id, xml);
-    console.log(`[Polar] Fetched & cached GPX for ${id} via Training Data API`);
-    return res.type('application/xml').send(xml);
-  } catch {
-    // Training Data API doesn't have it either
-  }
-
-  res.status(404).json({ error: 'GPX data niet beschikbaar.' });
+  res.status(404).json({ error: `${type.toUpperCase()} data niet beschikbaar.` });
 });
 
 router.post('/exercises/import', express.text({ type: 'text/xml', limit: '5mb' }), async (req, res) => {

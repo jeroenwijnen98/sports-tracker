@@ -1,3 +1,5 @@
+import { RUNNING_SPORT_LABELS } from './sports.js';
+
 /**
  * Parse ISO 8601 duration (e.g. "PT1H23M45S") to total seconds.
  */
@@ -56,11 +58,5 @@ export function formatHeartRate(hr) {
  * Map detailed sport info to display name.
  */
 export function sportLabel(sport) {
-  const map = {
-    RUNNING: 'Run',
-    TRAIL_RUNNING: 'Trail Run',
-    TREADMILL_RUNNING: 'Treadmill',
-    ULTRARUNNING_RUNNING: 'Ultra Run',
-  };
-  return map[sport] || sport || 'Run';
+  return RUNNING_SPORT_LABELS[sport] || sport || 'Run';
 }

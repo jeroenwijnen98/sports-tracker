@@ -1,12 +1,22 @@
-async function request(path, options = {}) {
+/**
+ * Fetch a backend route as JSON. A 401 reloads the page to show the login.
+ * With `duplicate: true`, a 409 resolves to the exercise the server already
+ * has, flagged `_duplicate`, instead of throwing.
+ */
+async function request(path, { duplicate = false, headers, ...options } = {}) {
   const res = await fetch(path, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...headers },
   });
 
   if (res.status === 401) {
     window.location.reload();
     throw new Error('Not authenticated');
+  }
+
+  if (duplicate && res.status === 409) {
+    const data = await res.json();
+    return { ...data.exercise, _duplicate: true };
   }
 
   if (!res.ok) {
@@ -61,55 +71,21 @@ export async function getExerciseTcx(id) {
   }
 }
 
-export async function importExerciseTcx(xmlString) {
-  const res = await fetch('/api/exercises/import', {
+export function importExerciseTcx(xmlString) {
+  return request('/api/exercises/import', {
     method: 'POST',
     headers: { 'Content-Type': 'text/xml' },
     body: xmlString,
+    duplicate: true,
   });
-
-  if (res.status === 401) {
-    window.location.reload();
-    throw new Error('Not authenticated');
-  }
-
-  const data = await res.json();
-
-  // 409 = duplicate, return exercise with a flag
-  if (res.status === 409) {
-    return { ...data.exercise, _duplicate: true };
-  }
-
-  if (!res.ok) {
-    throw new Error(data.error || `Import failed: ${res.status}`);
-  }
-
-  return data;
 }
 
-export async function importExerciseJson(jsonData) {
-  const res = await fetch('/api/exercises/import-json', {
+export function importExerciseJson(jsonData) {
+  return request('/api/exercises/import-json', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(jsonData),
+    duplicate: true,
   });
-
-  if (res.status === 401) {
-    window.location.reload();
-    throw new Error('Not authenticated');
-  }
-
-  const data = await res.json();
-
-  if (res.status === 409) {
-    return { ...data.exercise, _duplicate: true };
-  }
-
-  if (!res.ok) {
-    throw new Error(data.error || `Import failed: ${res.status}`);
-  }
-
-  return data;
 }
 
 export async function getExerciseGpx(id) {

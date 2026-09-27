@@ -1,3 +1,5 @@
+import { escapeHtml } from '../utils/html.js';
+
 /**
  * Create a shoe card element.
  */
@@ -42,10 +44,4 @@ export function createShoeCard(shoe, { onEdit, onDelete, onSetDefault }) {
   el.querySelector('[data-action="default"]')?.addEventListener('click', () => onSetDefault(shoe));
 
   return el;
-}
-
-function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }

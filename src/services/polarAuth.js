@@ -1,5 +1,6 @@
 import { config } from '../config.js';
 import { saveToken } from './tokenStore.js';
+import { polarRequest } from './polarApi.js';
 
 export function getAuthUrl() {
   const params = new URLSearchParams({
@@ -45,14 +46,9 @@ export async function exchangeCode(code) {
 
 async function registerUser(accessToken, userId) {
   try {
-    await fetch(`${config.polar.apiBase}/users`, {
+    await polarRequest(accessToken, '/users', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({ 'member-id': String(userId) }),
+      body: { 'member-id': String(userId) },
     });
   } catch {
     // User may already be registered, ignore errors
