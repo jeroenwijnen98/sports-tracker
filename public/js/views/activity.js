@@ -9,7 +9,7 @@ import { formatDuration, parseISODuration } from '../utils/format.js';
 
 /**
  * One bar of the chart: the kilometres run in one day, week, month or year.
- * @typedef {{ km: number, label: string, startDay?: number, key?: string, year?: number }} Bar
+ * @typedef {{ km: number, label: string, key?: string, year?: number }} Bar
  */
 
 /** @typedef {{ filtered: Exercise[], bars: Bar[], periodLabel: string }} PeriodData */
@@ -200,12 +200,12 @@ function buildMonthData(exercises, now) {
   for (let d = 1; d <= daysInMonth; d += 7) starts.push(d);
 
   /** @type {Bar[]} */
-  const bars = starts.map((start) => ({ km: 0, label: String(start), startDay: start }));
+  const bars = starts.map((start) => ({ km: 0, label: String(start) }));
 
   for (const ex of filtered) {
     const d = new Date(ex['start-time']).getDate();
     for (let i = bars.length - 1; i >= 0; i--) {
-      if (d >= /** @type {number} */ (bars[i].startDay)) {
+      if (d >= starts[i]) {
         bars[i].km += (ex.distance || 0) / 1000;
         break;
       }
