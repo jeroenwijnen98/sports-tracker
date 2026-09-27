@@ -85,11 +85,17 @@ async function reportAgainstTruth(map: SensorMap): Promise<void> {
       console.log(`[sensors]   ${date}  ${sensor.padEnd(11)} -> no cached TCX`);
       continue;
     }
-    const verdict = got.label === sensor ? 'correct' : got.label === 'unknown' ? 'undecided' : 'WRONG';
+    const verdict = scoreVerdict(got.label, sensor);
     console.log(
       `[sensors]   ${date}  ${sensor.padEnd(11)} -> ${got.label.padEnd(11)} smoothness ${String(got.smoothness).padStart(5)}  ${verdict}`
     );
   }
+}
+
+function scoreVerdict(got: HeartRateSensorLabel, confirmed: HeartRateSensorLabel): string {
+  if (got === confirmed) return 'correct';
+  if (got === 'unknown') return 'undecided';
+  return 'WRONG';
 }
 
 main().catch((err) => {
