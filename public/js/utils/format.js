@@ -79,5 +79,6 @@ export function formatHeartRate(hr) {
  * @returns {string}
  */
 export function sportLabel(sport) {
-  return (isRunningSportName(sport) && RUNNING_SPORT_LABELS[sport]) || sport || 'Run';
+  if (isRunningSportName(sport)) return RUNNING_SPORT_LABELS[sport];
+  return sport || 'Run';
 }
