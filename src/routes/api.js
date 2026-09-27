@@ -59,7 +59,8 @@ router.get('/exercises/:id/:type', async (req, res, next) => {
 
   // Fallback: try Training Data API (works outside transactions)
   try {
-    const xml = await (await polarRequest(req.accessToken, `/exercises/${id}/${type}`, { accept: XML_ACCEPT[type] })).text();
+    const polarRes = await polarRequest(req.accessToken, `/exercises/${id}/${type}`, { accept: XML_ACCEPT[type] });
+    const xml = await polarRes.text();
     await writeXmlCache(type, id, xml);
     console.log(`[Polar] Fetched & cached ${type.toUpperCase()} for ${id} via Training Data API`);
     return res.type('application/xml').send(xml);

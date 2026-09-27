@@ -73,11 +73,11 @@ function openShoeModal(shoe = null) {
     <form id="shoe-form" class="modal-body">
       <div class="form-group">
         <label for="shoe-name">Naam</label>
-        <input type="text" id="shoe-name" placeholder="bijv. Nike Pegasus 41" value="${escapeHtml(shoe?.name || '')}" required>
+        <input type="text" id="shoe-name" placeholder="bijv. Nike Pegasus 41" value="${escapeHtml(shoe?.name)}" required>
       </div>
       <div class="form-group">
         <label for="shoe-brand">Merk</label>
-        <input type="text" id="shoe-brand" placeholder="bijv. Nike" value="${escapeHtml(shoe?.brand || '')}">
+        <input type="text" id="shoe-brand" placeholder="bijv. Nike" value="${escapeHtml(shoe?.brand)}">
       </div>
       <div class="form-group">
         <label for="shoe-initial-km">Start km (optioneel)</label>
