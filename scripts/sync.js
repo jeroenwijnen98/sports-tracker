@@ -1,15 +1,13 @@
 /**
- * Standalone sync script — fetches exercises from Polar API
- * and saves them to the server-side JSON cache.
+ * Standalone sync script — pulls exercises from Polar into the server-side
+ * JSON cache, the same way /api/exercises does.
  * Runs without the Express server, used by sleepwatcher.
  */
 
 import 'dotenv/config';
 import { getToken } from '../src/services/tokenStore.js';
-import { getExercises } from '../src/services/polarApi.js';
-import { appendToCache, readCache } from '../src/services/exerciseCache.js';
-
-const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING'];
+import { syncFromPolar } from '../src/services/polarSync.js';
+import { readCache } from '../src/services/exerciseCache.js';
 
 async function main() {
   const token = await getToken();
@@ -19,24 +17,16 @@ async function main() {
   }
 
   console.log('[sync] Fetching exercises from Polar...');
-  const exercises = await getExercises(token.access_token, token.x_user_id);
+  const { fromTransaction, fromTrainingApi, added } = await syncFromPolar({
+    accessToken: token.access_token,
+    userId: token.x_user_id,
+  });
 
-  if (exercises.length === 0) {
-    const cached = await readCache();
-    console.log(`[sync] No new exercises from Polar (${cached.length} in cache)`);
-    return;
-  }
-
-  // Filter to running sports
-  const running = exercises.filter((ex) =>
-    RUNNING_SPORTS.includes(ex['detailed-sport-info'])
-  );
-
-  console.log(`[sync] Fetched ${exercises.length} exercises, ${running.length} running`);
-
-  const added = await appendToCache(running);
   const cached = await readCache();
-  console.log(`[sync] Added ${added} new exercises to cache (${cached.length} total)`);
+  console.log(
+    `[sync] ${fromTransaction} from transaction, ${fromTrainingApi} from Training Data API; ` +
+    `added ${added} new exercises to cache (${cached.length} total)`
+  );
 }
 
 main().catch((err) => {

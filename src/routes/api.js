@@ -2,7 +2,8 @@ import { Router } from 'express';
 import express from 'express';
 import { createHash } from 'node:crypto';
 import { tokenCheck } from '../middleware/tokenCheck.js';
-import { getExercises, polarFetch, polarFetchRaw } from '../services/polarApi.js';
+import { polarFetch, polarFetchRaw } from '../services/polarApi.js';
+import { syncFromPolar } from '../services/polarSync.js';
 import { readCache, appendToCache } from '../services/exerciseCache.js';
 import { readXmlCache, writeXmlCache } from '../services/xmlCache.js';
 import { withHrSensor } from '../services/hrSensor.js';
@@ -13,28 +14,11 @@ router.use(tokenCheck);
 
 router.get('/exercises', async (req, res) => {
   try {
-    // Pull Notifications: transaction-based, one-time consumption
-    const exercises = await getExercises(req.accessToken, req.polarUserId);
-    if (exercises.length > 0) {
-      await appendToCache(exercises);
-    }
-
-    // Training Data API: fetch any exercises not yet in our cache
-    try {
-      const trainingExercises = await polarFetch(req.accessToken, '/exercises');
-      if (trainingExercises.length > 0) {
-        const added = await appendToCache(trainingExercises);
-        if (added > 0) {
-          console.log(`[Polar] Added ${added} exercises from Training Data API`);
-        }
-      }
-    } catch (err) {
-      console.log('[Polar] Training Data API unavailable:', err.message);
-    }
+    await syncFromPolar({ accessToken: req.accessToken, userId: req.polarUserId });
 
     // Return all cached exercises (combines both sources)
     const all = await readCache();
-    res.json(await withHrSensor(all.length > 0 ? all : exercises));
+    res.json(await withHrSensor(all));
   } catch (err) {
     console.error('Exercises fetch error:', err.message);
     res.status(502).json({ error: 'Failed to fetch exercises from Polar' });

@@ -48,6 +48,7 @@ There are no build steps, no linter, and no test suite. The app requires a `.env
 - `src/routes/auth.js` — OAuth2 flow: `/auth/login`, `/auth/callback`, `/auth/status`, `/auth/logout`
 - `src/routes/api.js` — Polar API proxy: `/api/exercises`, `/api/exercises/:id`, `/api/exercises/:id/tcx`, `/api/exercises/:id/gpx`. Protected by `tokenCheck` middleware
 - `src/services/polarApi.js` — Implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit). Eagerly fetches and caches TCX/GPX during the transaction before commit
+- `src/services/polarSync.js` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.js`
 - `src/services/polarAuth.js` — OAuth token exchange with Basic auth, user registration
 - `src/services/tokenStore.js` — Reads/writes `src/data/token.json` (gitignored)
 - `src/services/xmlCache.js` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
