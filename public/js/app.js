@@ -19,13 +19,11 @@ const tabBtns = document.querySelectorAll('.tab-btn');
 
 // Check for auth redirect
 const params = new URLSearchParams(window.location.search);
-if (params.get('auth') === 'success') {
+if (params.has('auth')) {
   history.replaceState(null, '', '/');
-  // Will be handled after auth check
-}
-if (params.get('auth') === 'error') {
-  history.replaceState(null, '', '/');
-  showToast('Authenticatie mislukt. Probeer opnieuw.', 'error');
+  if (params.get('auth') === 'error') {
+    showToast('Authenticatie mislukt. Probeer opnieuw.', 'error');
+  }
 }
 
 // Init

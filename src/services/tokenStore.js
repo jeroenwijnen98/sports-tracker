@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,7 +21,6 @@ export async function saveToken(tokenData) {
 
 export async function deleteToken() {
   try {
-    const { unlink } = await import('node:fs/promises');
     await unlink(TOKEN_PATH);
   } catch {
     // File doesn't exist, that's fine

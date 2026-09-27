@@ -2,7 +2,7 @@ import { Router } from 'express';
 import express from 'express';
 import { createHash } from 'node:crypto';
 import { tokenCheck } from '../middleware/tokenCheck.js';
-import { polarFetch, polarFetchRaw } from '../services/polarApi.js';
+import { polarFetchRaw } from '../services/polarApi.js';
 import { syncFromPolar } from '../services/polarSync.js';
 import { readCache, appendToCache, removeFromCache } from '../services/exerciseCache.js';
 import { readXmlCache, writeXmlCache } from '../services/xmlCache.js';
@@ -32,19 +32,6 @@ router.get('/exercises/cached', async (req, res) => {
   } catch (err) {
     console.error('Cache read error:', err.message);
     res.json([]);
-  }
-});
-
-router.get('/exercises/:id', async (req, res) => {
-  try {
-    const data = await polarFetch(
-      req.accessToken,
-      `/exercises/${req.params.id}`
-    );
-    res.json(data);
-  } catch (err) {
-    console.error('Exercise detail error:', err.message);
-    res.status(502).json({ error: 'Failed to fetch exercise detail' });
   }
 });
 

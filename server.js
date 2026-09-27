@@ -6,7 +6,6 @@ import { attachIdleShutdown } from './src/services/idleShutdown.js';
 
 const app = express();
 
-app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
 attachIdleShutdown(app, { enabled: process.env.SPORTS_AUTOQUIT === '1' });
