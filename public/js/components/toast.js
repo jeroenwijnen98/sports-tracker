@@ -1,10 +1,12 @@
-const container = document.getElementById('toast-container');
+// @ts-check
+
+const container = /** @type {HTMLElement} */ (document.getElementById('toast-container'));
 
 /**
  * Show a toast notification.
  * @param {string} message
- * @param {'success'|'error'|'info'} type
- * @param {number} duration - ms
+ * @param {'success'|'error'|'info'} [type]
+ * @param {number} [duration] - ms
  */
 export function showToast(message, type = 'info', duration = 3000) {
   const el = document.createElement('div');

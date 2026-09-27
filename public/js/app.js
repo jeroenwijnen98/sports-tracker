@@ -1,3 +1,5 @@
+// @ts-check
+
 import { getAuthStatus, logout, importExerciseTcx, importExerciseJson } from './api.js';
 import { syncExercises, recalcAllShoeKm, assignDefaultShoe } from './sync.js';
 import { backgroundFetchDetails } from './services/detailData.js';
@@ -10,12 +12,23 @@ import { markOverlaps } from './utils/overlap.js';
 import { isRunningSport } from './utils/sports.js';
 import { keepSessionAlive } from './session.js';
 
-const authScreen = document.getElementById('auth-screen');
-const appScreen = document.getElementById('app-screen');
-const syncBtn = document.getElementById('sync-btn');
-const importBtn = document.getElementById('import-btn');
-const importFileInput = document.getElementById('import-file-input');
-const logoutBtn = document.getElementById('logout-btn');
+/** @typedef {import('../../types/domain.ts').Exercise} Exercise */
+
+/**
+ * The parts of a Polar data export's `products-devices` file used to name devices.
+ * @typedef {object} ProductsDevices
+ * @property {{ deviceId?: string, name?: string }[]} [devices]
+ * @property {{ deviceId: string, archived?: string }[]} [archivedDevices]
+ * @property {{ eventType?: string, modelName?: string, archived?: string }[]} [productRegistrationEvents]
+ */
+
+const authScreen = /** @type {HTMLElement} */ (document.getElementById('auth-screen'));
+const appScreen = /** @type {HTMLElement} */ (document.getElementById('app-screen'));
+const syncBtn = /** @type {HTMLElement} */ (document.getElementById('sync-btn'));
+const importBtn = /** @type {HTMLElement} */ (document.getElementById('import-btn'));
+const importFileInput = /** @type {HTMLInputElement} */ (document.getElementById('import-file-input'));
+const logoutBtn = /** @type {HTMLElement} */ (document.getElementById('logout-btn'));
+/** @type {NodeListOf<HTMLElement>} */
 const tabBtns = document.querySelectorAll('.tab-btn');
 
 // Check for auth redirect
@@ -58,7 +71,7 @@ async function doSync() {
     if (result.newExercises > 0) {
       showToast(`${result.newExercises} nieuwe activiteit(en) gesynchroniseerd`, 'success');
       // Fire-and-forget: eagerly cache TCX detail data for new exercises
-      if (result.newIds?.length > 0) {
+      if (result.newIds && result.newIds.length > 0) {
         backgroundFetchDetails(result.newIds);
       }
     } else {
@@ -80,20 +93,23 @@ syncBtn.addEventListener('click', doSync);
 // Import TCX
 importBtn.addEventListener('click', () => importFileInput.click());
 
-importFileInput.addEventListener('change', async (e) => {
-  const files = Array.from(e.target.files);
+importFileInput.addEventListener('change', async () => {
+  const files = Array.from(importFileInput.files || []);
   if (files.length === 0) return;
 
   importBtn.classList.add('syncing');
   try {
+    /** @type {Exercise[]} */
     let imported = [];
     let duplicates = 0;
 
     // Build device ID → name map from products-devices file if present
+    /** @type {Record<string, string>} */
     const deviceMap = {};
     for (const file of files) {
       if (file.name.startsWith('products-devices')) {
         try {
+          /** @type {ProductsDevices} */
           const pd = JSON.parse(await file.text());
           for (const d of pd.devices || []) {
             if (d.deviceId && d.name) deviceMap[d.deviceId] = d.name;
@@ -132,7 +148,7 @@ importFileInput.addEventListener('change', async (e) => {
           imported.push(exercise);
         }
       } catch (err) {
-        console.error(`Import failed for ${file.name}:`, err.message, err);
+        console.error(`Import failed for ${file.name}:`, /** @type {Error} */ (err).message, err);
       }
     }
 
@@ -188,6 +204,7 @@ logoutBtn.addEventListener('click', async () => {
 });
 
 // Tabs
+/** @type {string | undefined} */
 let activeTab = 'activities';
 
 tabBtns.forEach((btn) => {

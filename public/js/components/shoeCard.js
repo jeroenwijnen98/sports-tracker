@@ -1,7 +1,14 @@
+// @ts-check
+
 import { escapeHtml } from '../utils/html.js';
+
+/** @typedef {import('../../../types/domain.ts').Shoe} Shoe */
 
 /**
  * Create a shoe card element.
+ * @param {Shoe} shoe
+ * @param {{ onEdit: (shoe: Shoe) => void, onDelete: (shoe: Shoe) => void, onSetDefault: (shoe: Shoe) => void }} handlers
+ * @returns {HTMLDivElement}
  */
 export function createShoeCard(shoe, { onEdit, onDelete, onSetDefault }) {
   const el = document.createElement('div');

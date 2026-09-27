@@ -1,8 +1,10 @@
+// @ts-check
+
 import { getAll } from '../db.js';
 import { createRunCard } from '../components/runCard.js';
 import { openRunDetail } from './runDetail.js';
 
-const panel = document.getElementById('tab-activities');
+const panel = /** @type {HTMLElement} */ (document.getElementById('tab-activities'));
 
 export async function renderActivities() {
   const exercises = await getAll('exercises');
