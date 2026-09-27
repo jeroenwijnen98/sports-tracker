@@ -51,7 +51,10 @@ Backend files move to TypeScript that Node runs as it is (type stripping), so
 constructor parameter properties), requires `import type` for type-only imports,
 and lets relative imports name their `.ts` extension. Plain `.js` files are not
 checked until they opt in with `// @ts-check`; the frontend stays `.js` served
-as it is and is typed through JSDoc.
+as it is and is typed through JSDoc. The frontend data layer (`db.js`, `api.js`, `sync.js`,
+`session.js`, `services/` and `utils/`) is checked; `app.js`, `views/` and
+`components/` are not yet. `db.js` maps each store name to its record type, so
+`getAll('shoes')` is a `Shoe[]`.
 
 The shared domain types live in `types/domain.ts` (exercise, lap, trackpoint,
 route, detail data, shoe, heart rate sensor, smoothness). Server code imports
@@ -106,7 +109,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `public/js/views/` — Tab renderers (`activities.js`, `shoes.js`)
 - `public/js/components/` — Reusable UI: `runCard.js`, `shoeCard.js`, `modal.js`, `toast.js`
 - `public/js/utils/` — Formatters for distance, pace, duration, dates
-- `public/js/utils/sports.js` — `RUNNING_SPORTS`, their labels and `isRunningSport()`: the one running sport list, also imported by `src/services/importConverters.js`
+- `public/js/utils/sports.js` — `RUNNING_SPORTS`, their labels, `isRunningSport(exercise)` and the `isRunningSportName(sport)` type guard: the one running sport list, also imported by `src/services/importConverters.js`
 - `public/js/utils/html.js` — `escapeHtml()`, the one escaper for user- or file-controlled strings (shoe name/brand, device) put into markup
 - `public/js/utils/overlap.js` — `markOverlaps(imported, existing)`: marks the phone recording (Polar Beat, or no device) as overlap when a watch recording started within 5 minutes and overlaps in time, both within an import batch and against stored exercises. Pure; the import handler in `app.js` saves the result
 - `public/js/services/detailData.js` — Fetches TCX/GPX from backend, parses them, and caches parsed detail data on exercise objects in IndexedDB

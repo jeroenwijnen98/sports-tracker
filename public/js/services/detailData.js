@@ -1,7 +1,12 @@
+// @ts-check
+
 import { get, put } from '../db.js';
 import { getExerciseTcx, getExerciseGpx } from '../api.js';
 import { parseTcx } from '../utils/tcxParser.js';
 import { parseGpx } from '../utils/gpxParser.js';
+
+/** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
+/** @typedef {import('../../../types/domain.ts').DetailData} DetailData */
 
 const RETRY_AFTER_MS = 60 * 60 * 1000; // 1 hour
 
@@ -9,6 +14,9 @@ const RETRY_AFTER_MS = 60 * 60 * 1000; // 1 hour
  * Get detailed data (trackpoints, laps, route) for an exercise.
  * Checks IndexedDB cache first, then fetches from Polar API.
  * Returns the detail data object, or null if unavailable.
+ *
+ * @param {string} exerciseId
+ * @returns {Promise<DetailData | null>}
  */
 export async function getDetailData(exerciseId) {
   const exercise = await get('exercises', exerciseId);
@@ -16,7 +24,7 @@ export async function getDetailData(exerciseId) {
 
   // Return cached data (retry unavailable entries after TTL)
   if (exercise.detailData) {
-    if (!exercise.detailData.unavailable) return exercise.detailData;
+    if (!('unavailable' in exercise.detailData)) return exercise.detailData;
     // Markers written before the rename carry `timestamp` instead of `checkedAt`
     const { checkedAt, timestamp } = exercise.detailData;
     const age = Date.now() - (checkedAt ?? timestamp ?? 0);
@@ -28,6 +36,9 @@ export async function getDetailData(exerciseId) {
 
 /**
  * Force-retry fetching detail data, ignoring any cached unavailable state.
+ *
+ * @param {string} exerciseId
+ * @returns {Promise<DetailData | null>}
  */
 export async function retryDetailData(exerciseId) {
   const exercise = await get('exercises', exerciseId);
@@ -36,6 +47,10 @@ export async function retryDetailData(exerciseId) {
   return fetchAndCacheDetail(exercise);
 }
 
+/**
+ * @param {Exercise} exercise
+ * @returns {Promise<DetailData | null>}
+ */
 async function fetchAndCacheDetail(exercise) {
   // Try TCX
   const tcxXml = await getExerciseTcx(exercise.id);
@@ -49,11 +64,14 @@ async function fetchAndCacheDetail(exercise) {
   // Fallback: try GPX for map-only data
   const gpxXml = await getExerciseGpx(exercise.id);
   if (gpxXml) {
-    const data = parseGpx(gpxXml);
-    data.laps = [];
-    data.allTrackpoints = [];
-    data.hasHeartRate = false;
-    data.hasSpeed = false;
+    /** @type {DetailData} */
+    const data = {
+      ...parseGpx(gpxXml),
+      laps: [],
+      allTrackpoints: [],
+      hasHeartRate: false,
+      hasSpeed: false,
+    };
     exercise.detailData = data;
     await put('exercises', exercise);
     return data;
@@ -68,6 +86,8 @@ async function fetchAndCacheDetail(exercise) {
 /**
  * Eagerly fetch and cache detail data for a list of exercise IDs.
  * Fire-and-forget; errors are silently ignored.
+ *
+ * @param {string[]} ids
  */
 export async function backgroundFetchDetails(ids) {
   for (const id of ids) {

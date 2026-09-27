@@ -1,10 +1,17 @@
+// @ts-check
+
 import { getExercises, getCachedExercises } from './api.js';
 import { getAll, put, putMany, get } from './db.js';
 import { isRunningSport } from './utils/sports.js';
 
+/** @typedef {import('../../types/domain.ts').Exercise} Exercise */
+/** @typedef {import('../../types/domain.ts').HeartRateSensor} HeartRateSensor */
+
 /**
  * Sync exercises from Polar API + server-side cache into IndexedDB.
- * Returns { newExercises, total } with counts.
+ * Returns { newExercises, total } with counts, and the ids of the new ones.
+ *
+ * @returns {Promise<{ newExercises: number, total: number, newIds?: string[] }>}
  */
 export async function syncExercises() {
   // Fetch from both Polar transaction and server-side cache in parallel
@@ -14,7 +21,9 @@ export async function syncExercises() {
   ]);
 
   // Merge both sources, deduplicate by id
+  /** @type {Set<string>} */
   const seen = new Set();
+  /** @type {Exercise[]} */
   const merged = [];
   for (const ex of [...remote, ...cached]) {
     if (!seen.has(ex.id)) {
@@ -56,11 +65,16 @@ export async function syncExercises() {
  * locally. Classification runs server-side over the cached TCX, so it can
  * appear or be recalibrated long after an exercise was first synced. Only the
  * one field is touched — shoeId, overlap and cached detailData stay put.
+ *
+ * @param {Exercise[]} incoming
+ * @param {Exercise[]} existing
  */
 async function backfillHrSensor(incoming, existing) {
-  const bySensor = new Map(
-    incoming.filter((e) => e.hrSensor).map((e) => [e.id, e.hrSensor])
-  );
+  /** @type {Map<string, HeartRateSensor>} */
+  const bySensor = new Map();
+  for (const e of incoming) {
+    if (e.hrSensor) bySensor.set(e.id, e.hrSensor);
+  }
   if (bySensor.size === 0) return;
 
   const updated = [];
@@ -79,6 +93,8 @@ async function backfillHrSensor(incoming, existing) {
 /**
  * Assign the default shoe ID to exercises that don't have one. Mutates them in
  * place; the caller saves them.
+ *
+ * @param {Exercise[]} exercises
  */
 export async function assignDefaultShoe(exercises) {
   const shoes = await getAll('shoes');
@@ -94,6 +110,9 @@ export async function assignDefaultShoe(exercises) {
 
 /**
  * Recalculate total km for a shoe based on assigned exercises.
+ *
+ * @param {number} shoeId
+ * @returns {Promise<number>} Kilometres run in the shoe here, without its initial km.
  */
 export async function recalcShoeKm(shoeId) {
   const exercises = await getAll('exercises');
@@ -113,6 +132,6 @@ export async function recalcShoeKm(shoeId) {
 export async function recalcAllShoeKm() {
   const shoes = await getAll('shoes');
   for (const shoe of shoes) {
-    await recalcShoeKm(shoe.id);
+    if (shoe.id !== undefined) await recalcShoeKm(shoe.id);
   }
 }
