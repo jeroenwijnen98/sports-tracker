@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RUNNING_SPORTS, isRunningSport } from '../public/js/utils/sports.js';
+import { RUNNING_SPORTS, isRunningSport, isRunningSportName } from '../public/js/utils/sports.js';
 import { sportLabel } from '../public/js/utils/format.js';
 import { polarJsonToExercise } from '../src/services/importConverters.ts';
 
@@ -16,10 +16,18 @@ test('isRunningSport reads detailed-sport-info', () => {
   assert.equal(isRunningSport({}), false);
 });
 
+test('isRunningSportName accepts only the running sports', () => {
+  for (const sport of RUNNING_SPORTS) assert.equal(isRunningSportName(sport), true);
+  assert.equal(isRunningSportName('CYCLING'), false);
+  assert.equal(isRunningSportName('toString'), false);
+  assert.equal(isRunningSportName(undefined), false);
+});
+
 test('sportLabel names each running sport', () => {
   assert.deepEqual(RUNNING_SPORTS.map(sportLabel), ['Run', 'Trail Run', 'Treadmill', 'Ultra Run']);
   assert.equal(sportLabel('CYCLING'), 'CYCLING');
   assert.equal(sportLabel(undefined), 'Run');
+  assert.equal(sportLabel('toString'), 'toString');
 });
 
 test('a Polar data export keeps its sport name', () => {

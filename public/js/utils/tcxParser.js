@@ -1,19 +1,32 @@
+// @ts-check
+
+/** @typedef {import('../../../types/domain.ts').DetailData} DetailData */
+/** @typedef {import('../../../types/domain.ts').Lap} Lap */
+/** @typedef {import('../../../types/domain.ts').Trackpoint} Trackpoint */
+/** @typedef {import('../../../types/domain.ts').Route} Route */
+
 /**
- * Parse a TCX XML string into structured data.
- * Returns { laps, allTrackpoints, route, hasGps, hasHeartRate, hasSpeed }
+ * Parse a TCX XML string into detail data: its laps, trackpoints and route.
+ *
+ * @param {string} xmlString
+ * @returns {DetailData}
  */
 export function parseTcx(xmlString) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlString, 'application/xml');
 
   const ns = doc.documentElement.namespaceURI || '';
+  /** @type {(parent: Document | Element, tag: string) => HTMLCollectionOf<Element>} */
   const sel = (parent, tag) =>
     ns
       ? parent.getElementsByTagNameNS(ns, tag)
       : parent.getElementsByTagName(tag);
 
+  /** @type {Lap[]} */
   const laps = [];
+  /** @type {Trackpoint[]} */
   const allTrackpoints = [];
+  /** @type {Route} */
   const route = [];
   let hasGps = false;
   let hasHeartRate = false;
@@ -49,7 +62,7 @@ export function parseTcx(xmlString) {
       const time = timeEl ? timeEl.textContent : null;
 
       const distEl = sel(tp, 'DistanceMeters')[0];
-      const dist = distEl ? parseFloat(distEl.textContent) : null;
+      const dist = distEl ? parseFloat(distEl.textContent ?? '') : null;
 
       // Position
       const posEls = sel(tp, 'Position');
@@ -75,7 +88,7 @@ export function parseTcx(xmlString) {
       let speed = null;
       const extEls = tp.getElementsByTagName('ns3:Speed');
       if (extEls.length) {
-        speed = parseFloat(extEls[0].textContent);
+        speed = parseFloat(extEls[0].textContent ?? '');
         if (!isNaN(speed)) hasSpeed = true;
         else speed = null;
       }
@@ -84,10 +97,9 @@ export function parseTcx(xmlString) {
         const extEls2 = tp.getElementsByTagName('Speed');
         for (let i = 0; i < extEls2.length; i++) {
           // Only grab Speed inside extensions, skip top-level
-          if (extEls2[i].parentElement &&
-              (extEls2[i].parentElement.localName === 'TPX' ||
-               extEls2[i].parentElement.localName === 'ns3:TPX')) {
-            speed = parseFloat(extEls2[i].textContent);
+          const parentName = extEls2[i].parentElement?.localName;
+          if (parentName === 'TPX' || parentName === 'ns3:TPX') {
+            speed = parseFloat(extEls2[i].textContent ?? '');
             if (!isNaN(speed)) hasSpeed = true;
             else speed = null;
             break;
@@ -109,8 +121,12 @@ export function parseTcx(xmlString) {
   return { laps, allTrackpoints, route, hasGps, hasHeartRate, hasSpeed };
 }
 
+/**
+ * @param {Element | undefined} el
+ * @returns {number | null} The element's number, or null when missing or not a number.
+ */
 function floatVal(el) {
   if (!el) return null;
-  const v = parseFloat(el.textContent);
+  const v = parseFloat(el.textContent ?? '');
   return isNaN(v) ? null : v;
 }

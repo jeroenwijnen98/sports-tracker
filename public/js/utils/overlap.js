@@ -1,11 +1,20 @@
+// @ts-check
+
 import { parseISODuration } from './format.js';
+
+/** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
 
 // Two recordings of the same run start within this window of each other.
 const OVERLAP_THRESHOLD_MS = 5 * 60 * 1000;
 
 // The phone app (Polar Beat) is the recording that gives way to a watch.
+/** @type {(device: string | undefined) => boolean} */
 const isPhoneApp = (device) => !device || device === 'Polar Beat';
 
+/**
+ * @param {Exercise} a
+ * @param {Exercise} b
+ */
 function overlapsInTime(a, b) {
   const aStart = new Date(a['start-time']).getTime();
   const aEnd = aStart + parseISODuration(a.duration) * 1000;
@@ -22,9 +31,14 @@ function overlapsInTime(a, b) {
  * Does not mutate its arguments. Returns the imported exercises with overlap
  * marked, the existing exercises that are newly marked (to be saved), and how
  * many exercises were marked in total.
+ *
+ * @param {Exercise[]} imported
+ * @param {Exercise[]} existing
+ * @returns {{ imported: Exercise[], updatedExisting: Exercise[], count: number }}
  */
 export function markOverlaps(imported, existing) {
   const result = imported.map((ex) => ({ ...ex }));
+  /** @type {Map<Exercise, Exercise>} */
   const updated = new Map();
   let count = 0;
 
