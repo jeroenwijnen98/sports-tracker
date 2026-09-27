@@ -40,6 +40,25 @@ sleepwatcher hands it a bare PATH.
 
 There are no build steps and no linter. The app requires a `.env` file with `POLAR_CLIENT_ID` and `POLAR_CLIENT_SECRET`.
 
+## Type checking
+
+```bash
+npm run typecheck       # tsc -p . — checks only, never emits
+```
+
+Backend files move to TypeScript that Node runs as it is (type stripping), so
+`tsconfig.json` allows erasable syntax only (no `enum`, `namespace` or
+constructor parameter properties), requires `import type` for type-only imports,
+and lets relative imports name their `.ts` extension. Plain `.js` files are not
+checked until they opt in with `// @ts-check`; the frontend stays `.js` served
+as it is and is typed through JSDoc.
+
+The shared domain types live in `types/domain.ts` (exercise, lap, trackpoint,
+route, detail data, shoe, heart rate sensor, smoothness). Server code imports
+them with `import type`; frontend files reference them with a JSDoc
+`@typedef {import('../../types/domain.ts').Exercise} Exercise`, so the browser
+never loads the file. Change a shape there, not in two places.
+
 ## Tests
 
 ```bash
