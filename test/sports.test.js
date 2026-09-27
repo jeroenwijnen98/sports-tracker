@@ -31,7 +31,8 @@ test('sportLabel names each running sport', () => {
 });
 
 test('a Polar data export keeps its sport name', () => {
-  const session = (sport) => ({ exercises: [{ sport, startTime: '2000-01-01T08:00:00.000' }] });
+  /** @type {(sport: string | undefined) => import('../src/services/importConverters.ts').ExportSession} */
+  const session = (sport) => ({ exercises: [{ sport, startTime: '2000-01-01T08:00:00.000', duration: 'PT30M' }] });
   assert.equal(polarJsonToExercise(session('TRAIL_RUNNING'))['detailed-sport-info'], 'TRAIL_RUNNING');
   assert.equal(polarJsonToExercise(session('CYCLING'))['detailed-sport-info'], 'CYCLING');
   assert.equal(polarJsonToExercise(session(undefined))['detailed-sport-info'], 'OTHER');

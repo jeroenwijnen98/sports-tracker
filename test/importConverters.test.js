@@ -8,10 +8,17 @@ import {
 } from '../src/services/importConverters.ts';
 import { parseISODuration } from '../public/js/utils/format.js';
 
+/** @typedef {import('../src/services/importConverters.ts').ExportSession} ExportSession */
+/** @typedef {NonNullable<ExportSession['exercises'][number]['laps']>[number]} ExportLap */
+
 const START = '2000-01-01T08:00:00.000';
 
 // A synthetic Polar data export training session: 20 minutes, 4 km, with a
 // route placed around 0,0 so it resembles no real run.
+/**
+ * @param {{ laps?: ExportLap[], sport?: string }} [options]
+ * @returns {ExportSession}
+ */
 function session({ laps = [], sport = 'RUNNING' } = {}) {
   const heartRate = [];
   const speed = [];
@@ -55,6 +62,7 @@ test('JSON → TCX → metadata keeps distance, duration and heart rate', () => 
 });
 
 test('JSON → TCX → metadata with laps sums the laps', () => {
+  /** @type {(n: number) => ExportLap} */
   const lap = (n) => ({
     duration: 'PT600S',
     splitTime: `PT${600 * n}S`,

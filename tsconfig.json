@@ -15,10 +15,10 @@
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
 
-    // Converted .ts and unconverted .js coexist. A .js file is only checked
-    // once it opts in with `// @ts-check`.
+    // The backend is .ts; the frontend, tests and fixture generator stay .js
+    // (JSDoc-typed). Every .js file in `include` is checked, pragma or not.
     "allowJs": true,
-    "checkJs": false,
+    "checkJs": true,
     "resolveJsonModule": true,
 
     "strict": true,

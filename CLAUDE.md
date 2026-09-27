@@ -38,7 +38,9 @@ hardcoded path survived the move to `~/Developer` and failed silently on every
 wake for months. It also probes for node in the known install locations, because
 sleepwatcher hands it a bare PATH.
 
-There are no build steps and no linter. The app requires a `.env` file with `POLAR_CLIENT_ID` and `POLAR_CLIENT_SECRET`.
+There are no build steps and no linter; the checks are `npm run typecheck`
+(strict, the whole repo) and `npm test`. The app requires a `.env` file with
+`POLAR_CLIENT_ID` and `POLAR_CLIENT_SECRET`.
 
 ## Type checking
 
@@ -46,15 +48,19 @@ There are no build steps and no linter. The app requires a `.env` file with `POL
 npm run typecheck       # tsc -p . — checks only, never emits
 ```
 
-Backend files move to TypeScript that Node runs as it is (type stripping), so
+The backend is TypeScript that Node runs as it is (type stripping), so
 `tsconfig.json` allows erasable syntax only (no `enum`, `namespace` or
 constructor parameter properties), requires `import type` for type-only imports,
-and lets relative imports name their `.ts` extension. Plain `.js` files are not
-checked until they opt in with `// @ts-check`; the frontend stays `.js` served
-as it is and is typed through JSDoc. Every file in `public/js/` opts in, so a
-new frontend file should start with `// @ts-check` too. `db.js` maps each store
-name to its record type, so `getAll('shoes')` is a `Shoe[]`. Elements the page
-always has are cast from `getElementById` with `/** @type {HTMLElement} */`.
+and lets relative imports name their `.ts` extension. `strict` and `checkJs` are
+on for everything in `include` (`server.ts`, `src`, `scripts`, `public/js`,
+`test`, `types`), so no file there goes unchecked. The frontend stays `.js`
+served as it is and typed through JSDoc, as do the tests and
+`test/fixtures/generate-hr-fixtures.js`. The frontend files still
+start with `// @ts-check` for editors that open them outside the project; a new
+one should too, but a missing pragma can no longer hide a file from the check.
+Nothing in the backend is `.js`, so a new backend file is `.ts`. `db.js` maps
+each store name to its record type, so `getAll('shoes')` is a `Shoe[]`.
+Elements the page always has are cast from `getElementById` with `/** @type {HTMLElement} */`.
 Leaflet is typed by the `@types/leaflet` dev dependency only: `runDetail.js`
 names it `typeof import('leaflet')` in JSDoc and `loadLeaflet()` returns the
 `window.L` the CDN script sets, so nothing imports it at run time.
@@ -109,7 +115,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `src/services/exerciseCache.ts` — Server-side exercise JSON cache (`src/data/exercises.json`). Deleting an exercise removes it here and records its id in `src/data/deletedExercises.json`, which `syncFromPolar()` skips so the Training Data API cannot bring it back; its TCX/GPX and sensor entry stay on disk
 - `src/services/hrSensor.ts` — Infers chest strap vs. wrist heart rate sensor from TCX signal texture, cached in `src/data/hrSensor.json`
 
-**Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler.
+**Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler. The `.js` is served as it is and type-checked through JSDoc against `types/domain.ts`.
 
 - `public/js/app.js` — Entry point: auth check, tab switching, sync trigger
 - `public/js/db.js` — IndexedDB wrapper (3 stores: `exercises`, `shoes`, `settings`)

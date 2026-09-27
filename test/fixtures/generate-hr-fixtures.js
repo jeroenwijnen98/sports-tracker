@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // mulberry32: small deterministic PRNG
+/** @param {number} seed */
 function rng(seed) {
   return () => {
     seed |= 0;
@@ -23,6 +24,7 @@ function rng(seed) {
   };
 }
 
+/** @param {number[]} hr */
 function tcx(hr) {
   const start = Date.UTC(2000, 0, 1, 8, 0, 0);
   const trackpoints = hr.map((bpm, i) => [
@@ -52,16 +54,25 @@ ${trackpoints}
 }
 
 // Slow drift from 130 towards 160 bpm, shared by both recordings.
+/** @param {number} i */
 function drift(i) {
   return 130 + 30 * (1 - Math.exp(-i / 300)) + 3 * Math.sin(i / 40);
 }
 
 // Chest strap: beat-to-beat jitter around the drift, rounded each second.
+/**
+ * @param {number} n
+ * @param {() => number} random
+ */
 function strapSeries(n, random) {
   return Array.from({ length: n }, (_, i) => Math.round(drift(i) + (random() - 0.5) * 1.6));
 }
 
 // Wrist: the same drift, heavily smoothed and only updated every few seconds.
+/**
+ * @param {number} n
+ * @param {() => number} random
+ */
 function wristSeries(n, random) {
   const hr = [];
   let value = Math.round(drift(0));

@@ -2,11 +2,15 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { markOverlaps } from '../public/js/utils/overlap.js';
 
+/** @typedef {import('../types/domain.ts').Exercise} Exercise */
+
+/** @type {(id: string, device: string | undefined, start: string, duration?: string) => Exercise} */
 const run = (id, device, start, duration = 'PT30M') => ({
   id,
   device,
   'start-time': `2000-01-01T${start}:00.000`,
   duration,
+  'detailed-sport-info': 'RUNNING',
 });
 
 test('phone and watch recording within the window: the phone one overlaps', () => {
@@ -14,8 +18,8 @@ test('phone and watch recording within the window: the phone one overlaps', () =
   const watch = run('w', 'Polar Pacer', '08:03');
   const { imported, updatedExisting, count } = markOverlaps([phone, watch], []);
 
-  assert.equal(imported.find((e) => e.id === 'p').overlap, true);
-  assert.equal(imported.find((e) => e.id === 'w').overlap, undefined);
+  assert.equal(imported.find((e) => e.id === 'p')?.overlap, true);
+  assert.equal(imported.find((e) => e.id === 'w')?.overlap, undefined);
   assert.deepEqual(updatedExisting, []);
   assert.equal(count, 1);
 });

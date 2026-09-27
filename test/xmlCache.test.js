@@ -4,7 +4,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+/** @type {string} */
 let dir;
+/** @type {typeof import('../src/services/xmlCache.ts')} */
 let xmlCache;
 
 before(async () => {
