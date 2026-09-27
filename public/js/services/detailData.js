@@ -1,4 +1,4 @@
-import { get, put, getAll } from '../db.js';
+import { get, put } from '../db.js';
 import { getExerciseTcx, getExerciseGpx } from '../api.js';
 import { parseTcx } from '../utils/tcxParser.js';
 import { parseGpx } from '../utils/gpxParser.js';
@@ -17,7 +17,9 @@ export async function getDetailData(exerciseId) {
   // Return cached data (retry unavailable entries after TTL)
   if (exercise.detailData) {
     if (!exercise.detailData.unavailable) return exercise.detailData;
-    const age = Date.now() - (exercise.detailData.timestamp || 0);
+    // Markers written before the rename carry `timestamp` instead of `checkedAt`
+    const { checkedAt, timestamp } = exercise.detailData;
+    const age = Date.now() - (checkedAt ?? timestamp ?? 0);
     if (age < RETRY_AFTER_MS) return null;
   }
 
@@ -57,23 +59,10 @@ async function fetchAndCacheDetail(exercise) {
     return data;
   }
 
-  // Both failed — cache as unavailable with timestamp for TTL retry
-  exercise.detailData = { unavailable: true, timestamp: Date.now() };
+  // Both failed — mark as unavailable so it is only retried after the TTL
+  exercise.detailData = { unavailable: true, checkedAt: Date.now() };
   await put('exercises', exercise);
   return null;
-}
-
-/**
- * Clear all cached unavailable detail data so it gets retried.
- */
-export async function clearUnavailableDetails() {
-  const exercises = await getAll('exercises');
-  for (const ex of exercises) {
-    if (ex.detailData?.unavailable) {
-      delete ex.detailData;
-      await put('exercises', ex);
-    }
-  }
 }
 
 /**

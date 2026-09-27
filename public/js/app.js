@@ -1,6 +1,6 @@
 import { getAuthStatus, logout, importExerciseTcx, importExerciseJson } from './api.js';
 import { syncExercises, recalcAllShoeKm } from './sync.js';
-import { backgroundFetchDetails, clearUnavailableDetails } from './services/detailData.js';
+import { backgroundFetchDetails } from './services/detailData.js';
 import { getAll, putMany, put } from './db.js';
 import { renderActivities } from './views/activities.js';
 import { renderActivity } from './views/activity.js';
@@ -35,8 +35,6 @@ async function init() {
   if (authenticated) {
     authScreen.style.display = 'none';
     appScreen.classList.add('active');
-    // Clear stuck unavailable detail data so it retries on next open
-    clearUnavailableDetails();
     await renderActivities();
 
     // Auto-sync if just authenticated
