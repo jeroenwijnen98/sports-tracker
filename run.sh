@@ -22,4 +22,4 @@ else
 fi
 
 echo "--- $(date '+%Y-%m-%d %H:%M:%S') ---" >> "$LOG"
-"$NODE" scripts/sync.js >> "$LOG" 2>&1
+"$NODE" scripts/sync.ts >> "$LOG" 2>&1

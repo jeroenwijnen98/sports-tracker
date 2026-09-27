@@ -16,7 +16,7 @@ heart rate sensor, smoothness) is the vocabulary the code must use.
 
 You are in a sandbox, not on the Mac that runs Sports Tracker. There is no `.env`,
 no Polar token and no `src/data/`: never call the Polar API, never run
-`scripts/sync.js` or the OAuth flow. The .app launcher, `install-app.command`,
+`scripts/sync.ts` or the OAuth flow. The .app launcher, `install-app.command`,
 `run.sh` and sleepwatcher cannot be exercised here either; edit them if the issue
 asks, but you cannot run them.
 

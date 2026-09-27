@@ -9,7 +9,7 @@ import { getToken } from '../src/services/tokenStore.ts';
 import { syncFromPolar } from '../src/services/polarSync.ts';
 import { readCache } from '../src/services/exerciseCache.ts';
 
-async function main() {
+async function main(): Promise<void> {
   const token = await getToken();
   if (!token?.access_token) {
     console.log('[sync] No token found — skipping');

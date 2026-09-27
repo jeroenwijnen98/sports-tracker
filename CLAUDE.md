@@ -32,7 +32,7 @@ after changing the logo, then `./install-app.command`.
 ## Weekly Sync
 
 `run.sh` is called from productivity-hub's sleepwatcher wake script and runs
-`scripts/sync.js`, appending to `logs/sync.log`. It derives its own project
+`scripts/sync.ts`, appending to `logs/sync.log`. It derives its own project
 directory from the script's location instead of hardcoding one — an earlier
 hardcoded path survived the move to `~/Developer` and failed silently on every
 wake for months. It also probes for node in the known install locations, because
@@ -63,9 +63,9 @@ them with `import type`; frontend files reference them with a JSDoc
 never loads the file. Change a shape there, not in two places.
 
 The whole backend is `.ts`: the server entry `server.ts`, the routes, config,
-the `tokenCheck` middleware and every service in `src/services/`. Only
-`scripts/` is still `.js` and imports them by their `.ts` name. Type stripping
-needs Node 22.18 or later. What `tokenCheck` adds to the request (`accessToken`,
+the `tokenCheck` middleware, every service in `src/services/` and the two Node
+scripts (`scripts/sync.ts`, `scripts/classify-sensors.ts`), all run with plain
+`node`. Type stripping needs Node 22.18 or later. What `tokenCheck` adds to the request (`accessToken`,
 `polarUserId`) is declared in `types/express.d.ts`.
 
 ## Tests
@@ -99,7 +99,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `src/routes/api.ts` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (DELETE only, to remove it from the exercise cache), `/api/exercises/:id/:type` (one handler for `tcx` and `gpx`; any other type falls through to 404), plus the `/api/exercises/import` (TCX) and `/import-json` (Polar data export) routes. Protected by `tokenCheck` middleware
 - `src/services/importConverters.ts` — Pure converters behind the import routes: `polarJsonToTcx(session)`, `polarJsonToExercise(session)`, `extractTcxMetadata(xml)`. Both import paths derive the same `import-…` id from the start time
 - `src/services/polarApi.ts` — `polarRequest(accessToken, pathOrUrl, { method, accept, body })` is the one AccessLink HTTP helper (auth header, Accept, throw on non-2xx); everything that talks to AccessLink goes through it. `XML_ACCEPT` maps `tcx`/`gpx` to their Accept types. Also implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit), eagerly fetching and caching TCX/GPX during the transaction before commit
-- `src/services/polarSync.ts` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.js`
+- `src/services/polarSync.ts` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.ts`
 - `src/services/polarAuth.ts` — OAuth token exchange with Basic auth, user registration
 - `src/services/tokenStore.ts` — Reads/writes `src/data/token.json` (gitignored)
 - `src/services/xmlCache.ts` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
@@ -132,7 +132,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - **Dual exercise sources:** Sync combines Pull Notifications (transaction flow) with the Training Data API (`/v3/exercises`) and deduplicates by ID. The `/api/exercises/:id/tcx` and `/gpx` routes serve from server-side cache first, then fall back to the Training Data API
 - **Token never expires:** Single OAuth flow, token persisted server-side as JSON file
 - **CSS theme:** Dark background (#0D0D0D), neon-green accent (#CEFF00), defined in `public/css/variables.css`
-- **Heart rate sensor inference:** Since no field records which sensor was used, `hrSensor.ts` classifies it from the texture of the 1 Hz series — a chest strap keeps beat-to-beat detail, wrist optical is heavily filtered and repeats values. Classification hangs off `writeXmlCache()` so every newly cached TCX is labelled; `node scripts/classify-sensors.js` rebuilds the whole map. The label rides along on the exercises endpoints and `sync.js` copies it into IndexedDB. **It is calibrated on 53 known chest strap runs plus the two runs in `src/services/hrSensorTruth.json` whose sensor is confirmed first-hand, so it is indicative only** — read `smoothness` rather than `label`, and recalibrate the constants marked `RECALIBRATE_ME` once more runs have a confirmed sensor. Add every run whose sensor you know to `hrSensorTruth.json`; `classify-sensors.js` scores against it
+- **Heart rate sensor inference:** Since no field records which sensor was used, `hrSensor.ts` classifies it from the texture of the 1 Hz series — a chest strap keeps beat-to-beat detail, wrist optical is heavily filtered and repeats values. Classification hangs off `writeXmlCache()` so every newly cached TCX is labelled; `node scripts/classify-sensors.ts` rebuilds the whole map. The label rides along on the exercises endpoints and `sync.js` copies it into IndexedDB. **It is calibrated on 53 known chest strap runs plus the two runs in `src/services/hrSensorTruth.json` whose sensor is confirmed first-hand, so it is indicative only** — read `smoothness` rather than `label`, and recalibrate the constants marked `RECALIBRATE_ME` once more runs have a confirmed sensor. Add every run whose sensor you know to `hrSensorTruth.json`; `classify-sensors.ts` scores against it
 
 ## Polar AccessLink API
 
