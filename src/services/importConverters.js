@@ -136,7 +136,7 @@ export function polarJsonToTcx(session) {
       if (lap.heartRate?.max) {
         lapXmls += `          <MaximumHeartRateBpm><Value>${Math.round(lap.heartRate.max)}</Value></MaximumHeartRateBpm>\n`;
       }
-      if (ex.kiloCalories && lapSource.length > 0) {
+      if (ex.kiloCalories) {
         lapXmls += `          <Calories>${Math.round(ex.kiloCalories / lapSource.length)}</Calories>\n`;
       }
       lapXmls += '          <Track>\n' + buildTrackpointXml(lapTimes) + '          </Track>\n';
@@ -230,7 +230,7 @@ export function extractTcxMetadata(xml) {
  * Deterministic id for an imported exercise, from its start time, so importing
  * the same run twice (as JSON or as TCX) is caught as a duplicate.
  */
-export function importId(key) {
+function importId(key) {
   const hash = createHash('sha256').update(key).digest('hex');
   return `import-${hash.slice(0, 16)}`;
 }
