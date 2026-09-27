@@ -1,8 +1,24 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { DATA_DIR } from '../config.js';
+import type {
+  Exercise,
+  HeartRateSensor,
+  HeartRateSensorLabel,
+  HeartRateTexture,
+} from '../../types/domain.ts';
+import { DATA_DIR } from '../config.ts';
 
 const CACHE_PATH = join(DATA_DIR, 'hrSensor.json');
+
+/** The heart rate sensor of every classified exercise, by exercise id. */
+export type SensorMap = Record<string, HeartRateSensor>;
+
+/** The heart rate trackpoints of a TCX, with the distance and cadence beside each. */
+interface HrSeries {
+  hr: number[];
+  distance: (number | null)[];
+  cadence: (number | null)[];
+}
 
 /**
  * Infers whether an exercise was recorded with a chest strap or with the
@@ -65,10 +81,10 @@ const CADENCE_RE = /<Cadence>(\d+)<\/Cadence>/;
  * actually carry a heart rate. Polar interleaves position-only trackpoints
  * that would otherwise show up as gaps.
  */
-function readSeries(xml) {
-  const hr = [];
-  const distance = [];
-  const cadence = [];
+function readSeries(xml: string): HrSeries {
+  const hr: number[] = [];
+  const distance: (number | null)[] = [];
+  const cadence: (number | null)[] = [];
 
   TRACKPOINT_RE.lastIndex = 0;
   let match;
@@ -91,15 +107,15 @@ function readSeries(xml) {
  * Mask out everything that is not steady running: standing still distorts the
  * texture, and the first two minutes are dominated by the sensor settling.
  */
-function movingMask({ hr, distance, cadence }) {
+function movingMask({ hr, distance, cadence }: HrSeries): number[] {
   const n = hr.length;
   const withDistance = distance.filter((d) => d !== null).length / n;
   const withCadence = cadence.filter((c) => c !== null).length / n;
 
-  let moving;
+  let moving: boolean[];
   if (withDistance > 0.8) {
     // Distance is monotonic in principle but Polar occasionally steps back.
-    const cumulative = [];
+    const cumulative: number[] = [];
     let peak = 0;
     for (const d of distance) {
       peak = Math.max(peak, d ?? peak);
@@ -117,14 +133,14 @@ function movingMask({ hr, distance, cadence }) {
     moving = new Array(n).fill(true);
   }
 
-  const indices = [];
+  const indices: number[] = [];
   for (let i = WARMUP_SAMPLES; i < n; i++) {
     if (moving[i]) indices.push(i);
   }
   // Treadmill and indoor runs sometimes carry neither usable signal; rather
   // than discard them, fall back to everything past the warmup.
   if (indices.length < MIN_SAMPLES) {
-    const fallback = [];
+    const fallback: number[] = [];
     for (let i = WARMUP_SAMPLES; i < n; i++) fallback.push(i);
     return fallback;
   }
@@ -135,7 +151,7 @@ function movingMask({ hr, distance, cadence }) {
  * Texture features for one exercise, or null when the TCX is too short or
  * carries no usable heart rate.
  */
-export function analyseHrTexture(xml) {
+export function analyseHrTexture(xml: string): HeartRateTexture | null {
   const series = readSeries(xml);
   if (series.hr.length < MIN_SAMPLES + WARMUP_SAMPLES) return null;
 
@@ -173,7 +189,7 @@ export function analyseHrTexture(xml) {
  * standard deviations towards wrist-like: positive is smoother than a typical
  * chest strap recording, negative is rougher.
  */
-export function classifyHrSensor(xml) {
+export function classifyHrSensor(xml: string): HeartRateSensor | null {
   const features = analyseHrTexture(xml);
   if (!features) return null;
 
@@ -184,7 +200,7 @@ export function classifyHrSensor(xml) {
     STRAP_REFERENCE.madResidual.sd;
   const smoothness = (repeatZ - madZ) / 2;
 
-  let label = 'unknown';
+  let label: HeartRateSensorLabel = 'unknown';
   if (smoothness >= WRIST_THRESHOLD) label = 'wrist';
   else if (smoothness <= STRAP_THRESHOLD) label = 'chest-strap';
 
@@ -198,7 +214,7 @@ export function classifyHrSensor(xml) {
   };
 }
 
-export async function readSensorCache() {
+export async function readSensorCache(): Promise<SensorMap> {
   try {
     return JSON.parse(await readFile(CACHE_PATH, 'utf-8'));
   } catch {
@@ -206,7 +222,7 @@ export async function readSensorCache() {
   }
 }
 
-export async function writeSensorCache(map) {
+export async function writeSensorCache(map: SensorMap): Promise<void> {
   await mkdir(dirname(CACHE_PATH), { recursive: true });
   await writeFile(CACHE_PATH, JSON.stringify(map, null, 2));
 }
@@ -215,7 +231,7 @@ export async function writeSensorCache(map) {
  * Classify and persist one exercise. Returns the result, or null when the TCX
  * has too little usable heart rate data.
  */
-export async function recordHrSensor(exerciseId, xml) {
+export async function recordHrSensor(exerciseId: string, xml: string): Promise<HeartRateSensor | null> {
   const result = classifyHrSensor(xml);
   if (!result) return null;
 
@@ -229,7 +245,7 @@ export async function recordHrSensor(exerciseId, xml) {
  * Attach stored sensor labels to a list of exercises, without overwriting a
  * field the exercise already carries.
  */
-export async function withHrSensor(exercises) {
+export async function withHrSensor(exercises: Exercise[]): Promise<Exercise[]> {
   const map = await readSensorCache();
   return exercises.map((exercise) => {
     const sensor = map[exercise.id];

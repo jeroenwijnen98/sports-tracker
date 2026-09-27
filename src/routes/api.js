@@ -1,12 +1,12 @@
 import { Router } from 'express';
 import express from 'express';
-import { tokenCheck } from '../middleware/tokenCheck.js';
-import { polarRequest, XML_ACCEPT } from '../services/polarApi.js';
-import { syncFromPolar } from '../services/polarSync.js';
-import { readCache, appendToCache, removeFromCache } from '../services/exerciseCache.js';
-import { readXmlCache, writeXmlCache } from '../services/xmlCache.js';
-import { withHrSensor } from '../services/hrSensor.js';
-import { polarJsonToTcx, polarJsonToExercise, extractTcxMetadata } from '../services/importConverters.js';
+import { tokenCheck } from '../middleware/tokenCheck.ts';
+import { polarRequest, XML_ACCEPT } from '../services/polarApi.ts';
+import { syncFromPolar } from '../services/polarSync.ts';
+import { readCache, appendToCache, removeFromCache } from '../services/exerciseCache.ts';
+import { readXmlCache, writeXmlCache } from '../services/xmlCache.ts';
+import { withHrSensor } from '../services/hrSensor.ts';
+import { polarJsonToTcx, polarJsonToExercise, extractTcxMetadata } from '../services/importConverters.ts';
 
 const router = Router();
 

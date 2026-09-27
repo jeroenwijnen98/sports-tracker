@@ -9,8 +9,8 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { classifyHrSensor, writeSensorCache } from '../src/services/hrSensor.js';
-import { DATA_DIR } from '../src/config.js';
+import { classifyHrSensor, writeSensorCache } from '../src/services/hrSensor.ts';
+import { DATA_DIR } from '../src/config.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TCX_DIR = join(DATA_DIR, 'tcx');

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RUNNING_SPORTS, isRunningSport } from '../public/js/utils/sports.js';
 import { sportLabel } from '../public/js/utils/format.js';
-import { polarJsonToExercise } from '../src/services/importConverters.js';
+import { polarJsonToExercise } from '../src/services/importConverters.ts';
 
 test('the running sports are road, trail, treadmill and ultra running', () => {
   assert.deepEqual(RUNNING_SPORTS, ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING']);

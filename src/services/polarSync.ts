@@ -1,5 +1,12 @@
-import { getExercises, polarRequest } from './polarApi.js';
-import { appendToCache, readDeletedIds } from './exerciseCache.js';
+import type { Exercise } from '../../types/domain.ts';
+import { getExercises, polarRequest } from './polarApi.ts';
+import { appendToCache, readDeletedIds } from './exerciseCache.ts';
+
+export interface SyncResult {
+  fromTransaction: number;
+  fromTrainingApi: number;
+  added: number;
+}
 
 /**
  * Pull every new exercise from Polar into the server-side cache.
@@ -17,16 +24,18 @@ import { appendToCache, readDeletedIds } from './exerciseCache.js';
  *
  * Returns how many exercises each source returned and how many were new.
  */
-export async function syncFromPolar({ accessToken, userId }) {
+export async function syncFromPolar(
+  { accessToken, userId }: { accessToken: string; userId: number },
+): Promise<SyncResult> {
   const deletedIds = await readDeletedIds();
-  const notDeleted = (exercises) => exercises.filter((e) => !deletedIds.has(String(e.id)));
+  const notDeleted = (exercises: Exercise[]) => exercises.filter((e) => !deletedIds.has(String(e.id)));
 
   const transactionExercises = await getExercises(accessToken, userId);
   let added = await appendToCache(notDeleted(transactionExercises));
 
   let fromTrainingApi = 0;
   try {
-    const trainingExercises = await (await polarRequest(accessToken, '/exercises')).json();
+    const trainingExercises: Exercise[] = await (await polarRequest(accessToken, '/exercises')).json();
     fromTrainingApi = trainingExercises.length;
     const addedFromTrainingApi = await appendToCache(notDeleted(trainingExercises));
     if (addedFromTrainingApi > 0) {
@@ -34,7 +43,7 @@ export async function syncFromPolar({ accessToken, userId }) {
     }
     added += addedFromTrainingApi;
   } catch (err) {
-    console.log('[Polar] Training Data API unavailable:', err.message);
+    console.log('[Polar] Training Data API unavailable:', (err as Error).message);
   }
 
   return { fromTransaction: transactionExercises.length, fromTrainingApi, added };

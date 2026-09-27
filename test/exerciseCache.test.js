@@ -11,7 +11,7 @@ before(async () => {
   dir = await mkdtemp(join(tmpdir(), 'sports-tracker-'));
   process.env.SPORTS_DATA_DIR = dir;
   // Imported only now, so the store resolves its path from the temp directory
-  cache = await import('../src/services/exerciseCache.js');
+  cache = await import('../src/services/exerciseCache.ts');
 });
 
 after(async () => {

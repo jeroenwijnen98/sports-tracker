@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { getAuthUrl, exchangeCode } from '../services/polarAuth.js';
-import { getToken, deleteToken } from '../services/tokenStore.js';
+import { getAuthUrl, exchangeCode } from '../services/polarAuth.ts';
+import { getToken, deleteToken } from '../services/tokenStore.ts';
 
 const router = Router();
 

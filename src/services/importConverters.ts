@@ -6,33 +6,90 @@
  */
 
 import { createHash } from 'node:crypto';
+import type { Exercise } from '../../types/domain.ts';
 import { RUNNING_SPORTS } from '../../public/js/utils/sports.js';
 
-const TCX_SPORT_MAP = {
+/** One sample of a Polar data export series. */
+interface ExportSample {
+  dateTime: string;
+  value: number;
+}
+
+/** One point of a Polar data export route. */
+interface ExportRouteSample {
+  dateTime: string;
+  latitude: number;
+  longitude: number;
+  altitude?: number;
+}
+
+interface ExportHeartRate {
+  avg?: number;
+  max?: number;
+}
+
+/** A lap of a Polar data export exercise. Durations are ISO 8601 (`PT…S`). */
+interface ExportLap {
+  duration: string;
+  /** Metres. */
+  distance?: number;
+  /** Time since the start at the end of this lap. */
+  splitTime?: string;
+  heartRate?: ExportHeartRate;
+}
+
+/** An exercise as the Polar data export writes it, only the fields read here. */
+interface ExportExercise {
+  startTime: string;
+  duration: string;
+  distance?: number;
+  kiloCalories?: number;
+  sport?: string;
+  heartRate?: ExportHeartRate;
+  laps?: ExportLap[];
+  autoLaps?: ExportLap[];
+  samples?: {
+    heartRate?: ExportSample[];
+    speed?: ExportSample[];
+    distance?: ExportSample[];
+    recordedRoute?: ExportRouteSample[];
+  };
+}
+
+/** A training-session JSON from the Polar data export. Only the first exercise is used. */
+export interface ExportSession {
+  deviceId?: string;
+  exercises: ExportExercise[];
+}
+
+/** The exercise read from an uploaded TCX; `start-time` is null when it has no `<Id>`. */
+export type TcxImportExercise = Omit<Exercise, 'start-time'> & { 'start-time': string | null };
+
+const TCX_SPORT_MAP: Record<string, string> = {
   Running: 'RUNNING',
   Biking: 'CYCLING',
   Other: 'OTHER',
 };
 
-const POLAR_SPORT_TO_TCX = {
+const POLAR_SPORT_TO_TCX: Record<string, string> = {
   ...Object.fromEntries(RUNNING_SPORTS.map((sport) => [sport, 'Running'])),
   CYCLING: 'Biking',
   ROAD_BIKING: 'Biking',
   MOUNTAIN_BIKING: 'Biking',
 };
 
-function escapeXml(s) {
+function escapeXml(s: string): string {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
  * Convert a Polar data export training-session JSON into TCX XML.
  */
-export function polarJsonToTcx(session) {
+export function polarJsonToTcx(session: ExportSession): string {
   const ex = session.exercises?.[0];
   if (!ex) throw new Error('No exercise found in training session');
 
-  const tcxSport = POLAR_SPORT_TO_TCX[ex.sport] || 'Other';
+  const tcxSport = (ex.sport && POLAR_SPORT_TO_TCX[ex.sport]) || 'Other';
   const startTime = ex.startTime;
   const startDate = new Date(startTime);
 
@@ -44,13 +101,13 @@ export function polarJsonToTcx(session) {
   const routeSamples = ex.samples?.recordedRoute || [];
 
   // Index all sample types by dateTime
-  const hrByTime = new Map();
+  const hrByTime = new Map<string, number>();
   for (const s of hrSamples) hrByTime.set(s.dateTime, s.value);
-  const speedByTime = new Map();
+  const speedByTime = new Map<string, number>();
   for (const s of speedSamples) speedByTime.set(s.dateTime, s.value);
-  const distByTime = new Map();
+  const distByTime = new Map<string, number>();
   for (const s of distSamples) distByTime.set(s.dateTime, s.value);
-  const routeByTime = new Map();
+  const routeByTime = new Map<string, ExportRouteSample>();
   for (const r of routeSamples) routeByTime.set(r.dateTime, r);
 
   // Collect all unique timestamps and sort chronologically
@@ -61,7 +118,7 @@ export function polarJsonToTcx(session) {
   const sortedTimes = [...allTimes].sort();
 
   // Helper: build trackpoint XML for a time range
-  function buildTrackpointXml(times) {
+  function buildTrackpointXml(times: string[]): string {
     let tpXml = '';
     for (const timeStr of times) {
       const hr = hrByTime.get(timeStr);
@@ -110,7 +167,7 @@ export function polarJsonToTcx(session) {
       const lapEndMs = lapStartTime.getTime() + lapDurSec * 1000;
 
       // Collect timestamps that fall within this lap
-      const lapTimes = [];
+      const lapTimes: string[] = [];
       while (timeIdx < sortedTimes.length) {
         const t = new Date(sortedTimes[timeIdx]).getTime();
         if (t > lapEndMs) break;
@@ -163,12 +220,12 @@ ${lapXmls}    </Activity>
 </TrainingCenterDatabase>`;
 }
 
-export function parsePTSeconds(pt) {
+export function parsePTSeconds(pt: string): number {
   const m = pt.match(/PT(\d+(?:\.\d+)?)S/);
   return m ? parseFloat(m[1]) : 0;
 }
 
-export function extractTcxMetadata(xml) {
+export function extractTcxMetadata(xml: string): TcxImportExercise {
   const startTime = xml.match(/<Id>([^<]+)<\/Id>/)?.[1] || null;
 
   const sportAttr = xml.match(/<Activity Sport="([^"]+)"/)?.[1] || 'Running';
@@ -221,7 +278,7 @@ export function extractTcxMetadata(xml) {
  * Deterministic id for an imported exercise, from its start time, so importing
  * the same run twice (as JSON or as TCX) is caught as a duplicate.
  */
-function importId(key) {
+function importId(key: string): string {
   const hash = createHash('sha256').update(key).digest('hex');
   return `import-${hash.slice(0, 16)}`;
 }
@@ -229,7 +286,7 @@ function importId(key) {
 /**
  * Build the exercise for a Polar data export training-session JSON.
  */
-export function polarJsonToExercise(session) {
+export function polarJsonToExercise(session: ExportSession): Exercise {
   const ex = session.exercises[0];
   const startTime = ex.startTime;
 

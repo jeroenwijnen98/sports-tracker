@@ -12,7 +12,7 @@ Normally: open **SportsTracker.app** (in the repo, or installed to /Applications
 via `./install-app.command`). It starts the server if the port is free, opens the
 browser, and exits. The server it starts runs with `SPORTS_AUTOQUIT=1`, so it
 shuts itself down about 15 seconds after the last browser window closes — see
-`src/services/idleShutdown.js`. Each page holds an SSE connection to
+`src/services/idleShutdown.ts`. Each page holds an SSE connection to
 `/api/session`; the count of open connections is what "a window is open" means.
 
 The OAuth round trip is the one case where no window is open but the server must
@@ -59,6 +59,11 @@ them with `import type`; frontend files reference them with a JSDoc
 `@typedef {import('../../types/domain.ts').Exercise} Exercise`, so the browser
 never loads the file. Change a shape there, not in two places.
 
+Config, the `tokenCheck` middleware and every service in `src/services/` are
+`.ts`; `server.js`, the routes and `scripts/` are still `.js` and import them by
+their `.ts` name. What `tokenCheck` adds to the request (`accessToken`,
+`polarUserId`) is declared in `types/express.d.ts`.
+
 ## Tests
 
 ```bash
@@ -71,7 +76,7 @@ classifier, formatters, running sports, HTML escaping) plus the exercise cache a
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
 
-Every file-backed store resolves its directory from `DATA_DIR` in `src/config.js`:
+Every file-backed store resolves its directory from `DATA_DIR` in `src/config.ts`:
 `SPORTS_DATA_DIR` if set, else `src/data`. A test that touches a store sets
 `SPORTS_DATA_DIR` to a temp dir **before** importing it (see
 `test/exerciseCache.test.js`), so the tests never write to `src/data`.
@@ -83,19 +88,19 @@ their `smoothness` and `label`, so update it when recalibrating.
 
 ## Architecture
 
-**Backend (src/):** Node.js + Express with only two dependencies (`express`, `dotenv`). ES modules throughout (`"type": "module"`).
+**Backend (src/):** Node.js + Express, services in TypeScript run by Node as they are, with only two dependencies (`express`, `dotenv`). ES modules throughout (`"type": "module"`).
 
 - `server.js` — Entry point, mounts routes and serves `public/` as static files
 - `src/routes/auth.js` — OAuth2 flow: `/auth/login`, `/auth/callback`, `/auth/status`, `/auth/logout`
 - `src/routes/api.js` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (DELETE only, to remove it from the exercise cache), `/api/exercises/:id/:type` (one handler for `tcx` and `gpx`; any other type falls through to 404), plus the `/api/exercises/import` (TCX) and `/import-json` (Polar data export) routes. Protected by `tokenCheck` middleware
-- `src/services/importConverters.js` — Pure converters behind the import routes: `polarJsonToTcx(session)`, `polarJsonToExercise(session)`, `extractTcxMetadata(xml)`. Both import paths derive the same `import-…` id from the start time
-- `src/services/polarApi.js` — `polarRequest(accessToken, pathOrUrl, { method, accept, body })` is the one AccessLink HTTP helper (auth header, Accept, throw on non-2xx); everything that talks to AccessLink goes through it. `XML_ACCEPT` maps `tcx`/`gpx` to their Accept types. Also implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit), eagerly fetching and caching TCX/GPX during the transaction before commit
-- `src/services/polarSync.js` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.js`
-- `src/services/polarAuth.js` — OAuth token exchange with Basic auth, user registration
-- `src/services/tokenStore.js` — Reads/writes `src/data/token.json` (gitignored)
-- `src/services/xmlCache.js` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
-- `src/services/exerciseCache.js` — Server-side exercise JSON cache (`src/data/exercises.json`). Deleting an exercise removes it here and records its id in `src/data/deletedExercises.json`, which `syncFromPolar()` skips so the Training Data API cannot bring it back; its TCX/GPX and sensor entry stay on disk
-- `src/services/hrSensor.js` — Infers chest strap vs. wrist heart rate sensor from TCX signal texture, cached in `src/data/hrSensor.json`
+- `src/services/importConverters.ts` — Pure converters behind the import routes: `polarJsonToTcx(session)`, `polarJsonToExercise(session)`, `extractTcxMetadata(xml)`. Both import paths derive the same `import-…` id from the start time
+- `src/services/polarApi.ts` — `polarRequest(accessToken, pathOrUrl, { method, accept, body })` is the one AccessLink HTTP helper (auth header, Accept, throw on non-2xx); everything that talks to AccessLink goes through it. `XML_ACCEPT` maps `tcx`/`gpx` to their Accept types. Also implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit), eagerly fetching and caching TCX/GPX during the transaction before commit
+- `src/services/polarSync.ts` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.js`
+- `src/services/polarAuth.ts` — OAuth token exchange with Basic auth, user registration
+- `src/services/tokenStore.ts` — Reads/writes `src/data/token.json` (gitignored)
+- `src/services/xmlCache.ts` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
+- `src/services/exerciseCache.ts` — Server-side exercise JSON cache (`src/data/exercises.json`). Deleting an exercise removes it here and records its id in `src/data/deletedExercises.json`, which `syncFromPolar()` skips so the Training Data API cannot bring it back; its TCX/GPX and sensor entry stay on disk
+- `src/services/hrSensor.ts` — Infers chest strap vs. wrist heart rate sensor from TCX signal texture, cached in `src/data/hrSensor.json`
 
 **Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler.
 
@@ -106,7 +111,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `public/js/views/` — Tab renderers (`activities.js`, `shoes.js`)
 - `public/js/components/` — Reusable UI: `runCard.js`, `shoeCard.js`, `modal.js`, `toast.js`
 - `public/js/utils/` — Formatters for distance, pace, duration, dates
-- `public/js/utils/sports.js` — `RUNNING_SPORTS`, their labels and `isRunningSport()`: the one running sport list, also imported by `src/services/importConverters.js`
+- `public/js/utils/sports.js` — `RUNNING_SPORTS`, their labels and `isRunningSport()`: the one running sport list, also imported by `src/services/importConverters.ts`
 - `public/js/utils/html.js` — `escapeHtml()`, the one escaper for user- or file-controlled strings (shoe name/brand, device) put into markup
 - `public/js/utils/overlap.js` — `markOverlaps(imported, existing)`: marks the phone recording (Polar Beat, or no device) as overlap when a watch recording started within 5 minutes and overlaps in time, both within an import batch and against stored exercises. Pure; the import handler in `app.js` saves the result
 - `public/js/services/detailData.js` — Fetches TCX/GPX from backend, parses them, and caches parsed detail data on exercise objects in IndexedDB
@@ -123,7 +128,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - **Dual exercise sources:** Sync combines Pull Notifications (transaction flow) with the Training Data API (`/v3/exercises`) and deduplicates by ID. The `/api/exercises/:id/tcx` and `/gpx` routes serve from server-side cache first, then fall back to the Training Data API
 - **Token never expires:** Single OAuth flow, token persisted server-side as JSON file
 - **CSS theme:** Dark background (#0D0D0D), neon-green accent (#CEFF00), defined in `public/css/variables.css`
-- **Heart rate sensor inference:** Since no field records which sensor was used, `hrSensor.js` classifies it from the texture of the 1 Hz series — a chest strap keeps beat-to-beat detail, wrist optical is heavily filtered and repeats values. Classification hangs off `writeXmlCache()` so every newly cached TCX is labelled; `node scripts/classify-sensors.js` rebuilds the whole map. The label rides along on the exercises endpoints and `sync.js` copies it into IndexedDB. **It is calibrated on 53 known chest strap runs plus the two runs in `src/services/hrSensorTruth.json` whose sensor is confirmed first-hand, so it is indicative only** — read `smoothness` rather than `label`, and recalibrate the constants marked `RECALIBRATE_ME` once more runs have a confirmed sensor. Add every run whose sensor you know to `hrSensorTruth.json`; `classify-sensors.js` scores against it
+- **Heart rate sensor inference:** Since no field records which sensor was used, `hrSensor.ts` classifies it from the texture of the 1 Hz series — a chest strap keeps beat-to-beat detail, wrist optical is heavily filtered and repeats values. Classification hangs off `writeXmlCache()` so every newly cached TCX is labelled; `node scripts/classify-sensors.js` rebuilds the whole map. The label rides along on the exercises endpoints and `sync.js` copies it into IndexedDB. **It is calibrated on 53 known chest strap runs plus the two runs in `src/services/hrSensorTruth.json` whose sensor is confirmed first-hand, so it is indicative only** — read `smoothness` rather than `label`, and recalibrate the constants marked `RECALIBRATE_ME` once more runs have a confirmed sensor. Add every run whose sensor you know to `hrSensorTruth.json`; `classify-sensors.js` scores against it
 
 ## Polar AccessLink API
 

@@ -5,9 +5,9 @@
  */
 
 import 'dotenv/config';
-import { getToken } from '../src/services/tokenStore.js';
-import { syncFromPolar } from '../src/services/polarSync.js';
-import { readCache } from '../src/services/exerciseCache.js';
+import { getToken } from '../src/services/tokenStore.ts';
+import { syncFromPolar } from '../src/services/polarSync.ts';
+import { readCache } from '../src/services/exerciseCache.ts';
 
 async function main() {
   const token = await getToken();

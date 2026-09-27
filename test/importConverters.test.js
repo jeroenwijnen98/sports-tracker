@@ -5,7 +5,7 @@ import {
   polarJsonToExercise,
   extractTcxMetadata,
   parsePTSeconds,
-} from '../src/services/importConverters.js';
+} from '../src/services/importConverters.ts';
 import { parseISODuration } from '../public/js/utils/format.js';
 
 const START = '2000-01-01T08:00:00.000';

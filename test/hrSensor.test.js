@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { classifyHrSensor } from '../src/services/hrSensor.js';
+import { classifyHrSensor } from '../src/services/hrSensor.ts';
 
 // Synthetic fixtures, see test/fixtures/generate-hr-fixtures.js. These are
 // snapshots: if the classifier's constants are recalibrated, update them.

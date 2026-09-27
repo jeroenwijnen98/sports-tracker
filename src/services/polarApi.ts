@@ -1,13 +1,22 @@
-import { config } from '../config.js';
-import { readXmlCache, writeXmlCache } from './xmlCache.js';
+import { config } from '../config.ts';
+import type { Exercise } from '../../types/domain.ts';
+import { readXmlCache, writeXmlCache } from './xmlCache.ts';
+import type { XmlType } from './xmlCache.ts';
 
 const API = config.polar.apiBase;
 
 /** Accept header for each kind of exercise XML Polar serves. */
-export const XML_ACCEPT = {
+export const XML_ACCEPT: Record<XmlType, string> = {
   tcx: 'application/vnd.garmin.tcx+xml',
   gpx: 'application/gpx+xml',
 };
+
+export interface PolarRequestOptions {
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  accept?: string;
+  /** Sent as JSON. */
+  body?: unknown;
+}
 
 /**
  * Every AccessLink request goes through here. `url` is a path under the API
@@ -15,8 +24,12 @@ export const XML_ACCEPT = {
  * Resolves to the Response, so the caller picks .json() or .text(); a non-2xx
  * status throws.
  */
-export async function polarRequest(accessToken, url, { method = 'GET', accept = 'application/json', body } = {}) {
-  const headers = { Authorization: `Bearer ${accessToken}`, Accept: accept };
+export async function polarRequest(
+  accessToken: string,
+  url: string,
+  { method = 'GET', accept = 'application/json', body }: PolarRequestOptions = {},
+): Promise<Response> {
+  const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}`, Accept: accept };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   const res = await fetch(url.startsWith('/') ? `${API}${url}` : url, {
@@ -38,12 +51,12 @@ export async function polarRequest(accessToken, url, { method = 'GET', accept = 
  * Uses the transaction exercise URL + /tcx or /gpx suffix.
  * This data is ONLY available before the transaction is committed.
  */
-async function fetchExerciseXml(accessToken, exerciseUrl, type) {
+async function fetchExerciseXml(accessToken: string, exerciseUrl: string, type: XmlType): Promise<string | null> {
   try {
     const res = await polarRequest(accessToken, `${exerciseUrl}/${type}`, { accept: XML_ACCEPT[type] });
     return await res.text();
   } catch (err) {
-    console.log(`[Polar] ${type.toUpperCase()} fetch for ${exerciseUrl} failed:`, err.message);
+    console.log(`[Polar] ${type.toUpperCase()} fetch for ${exerciseUrl} failed:`, (err as Error).message);
     return null;
   }
 }
@@ -58,7 +71,7 @@ async function fetchExerciseXml(accessToken, exerciseUrl, type) {
  * TCX/GPX are eagerly fetched via {exerciseUrl}/tcx during step 3 (before commit)
  * and cached server-side, because they become inaccessible after commit.
  */
-export async function getExercises(accessToken, userId) {
+export async function getExercises(accessToken: string, userId: number): Promise<Exercise[]> {
   // Step 1: Create transaction
   const createRes = await polarRequest(accessToken, `/users/${userId}/exercise-transactions`, { method: 'POST' });
 
@@ -70,21 +83,21 @@ export async function getExercises(accessToken, userId) {
     return [];
   }
 
-  const transaction = await createRes.json();
+  const transaction: { 'resource-uri': string } = await createRes.json();
   const listUrl = transaction['resource-uri'];
   const commit = () => polarRequest(accessToken, listUrl, { method: 'PUT' });
 
   try {
     // Step 2: List exercises in transaction
-    const listData = await (await polarRequest(accessToken, listUrl)).json();
+    const listData: { exercises?: string[] } = await (await polarRequest(accessToken, listUrl)).json();
     const exerciseUrls = listData.exercises || [];
     console.log(`[Polar] Found ${exerciseUrls.length} exercises in transaction`);
 
     // Step 3: Fetch each exercise + eagerly grab TCX/GPX before commit
-    const exercises = [];
+    const exercises: Exercise[] = [];
     for (const url of exerciseUrls) {
       try {
-        const exercise = await (await polarRequest(accessToken, url)).json();
+        const exercise: Exercise = await (await polarRequest(accessToken, url)).json();
         exercises.push(exercise);
 
         // Eagerly fetch and cache TCX/GPX while transaction is open
@@ -109,7 +122,7 @@ export async function getExercises(accessToken, userId) {
     }
 
     // Step 4: Commit transaction
-    await commit().catch((err) => console.log('[Polar] Commit failed:', err.message));
+    await commit().catch((err) => console.log('[Polar] Commit failed:', (err as Error).message));
 
     return exercises;
   } catch (err) {

@@ -1,11 +1,12 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { DATA_DIR } from '../config.js';
+import type { Exercise } from '../../types/domain.ts';
+import { DATA_DIR } from '../config.ts';
 
 const CACHE_PATH = join(DATA_DIR, 'exercises.json');
 const DELETED_PATH = join(DATA_DIR, 'deletedExercises.json');
 
-export async function readCache() {
+export async function readCache(): Promise<Exercise[]> {
   try {
     const data = await readFile(CACHE_PATH, 'utf-8');
     return JSON.parse(data);
@@ -14,7 +15,7 @@ export async function readCache() {
   }
 }
 
-export async function writeCache(exercises) {
+export async function writeCache(exercises: Exercise[]): Promise<void> {
   await mkdir(dirname(CACHE_PATH), { recursive: true });
   await writeFile(CACHE_PATH, JSON.stringify(exercises, null, 2));
 }
@@ -23,7 +24,7 @@ export async function writeCache(exercises) {
  * Append new exercises to cache, skipping duplicates by id.
  * Returns the count of newly added exercises.
  */
-export async function appendToCache(newExercises) {
+export async function appendToCache(newExercises: Exercise[]): Promise<number> {
   const existing = await readCache();
   const existingIds = new Set(existing.map((e) => e.id));
   const unique = newExercises.filter((e) => !existingIds.has(e.id));
@@ -39,7 +40,7 @@ export async function appendToCache(newExercises) {
  * rate sensor entry are kept: they cannot be fetched again.
  * Returns false when the id was not cached.
  */
-export async function removeFromCache(id) {
+export async function removeFromCache(id: string): Promise<boolean> {
   const existing = await readCache();
   const remaining = existing.filter((e) => String(e.id) !== String(id));
   if (remaining.length === existing.length) return false;
@@ -52,10 +53,10 @@ export async function removeFromCache(id) {
 }
 
 /** Ids of exercises deleted by the user, as strings. */
-export async function readDeletedIds() {
+export async function readDeletedIds(): Promise<Set<string>> {
   try {
-    return new Set(JSON.parse(await readFile(DELETED_PATH, 'utf-8')));
+    return new Set<string>(JSON.parse(await readFile(DELETED_PATH, 'utf-8')));
   } catch {
-    return new Set();
+    return new Set<string>();
   }
 }

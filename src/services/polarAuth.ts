@@ -1,8 +1,9 @@
-import { config } from '../config.js';
-import { saveToken } from './tokenStore.js';
-import { polarRequest } from './polarApi.js';
+import { config } from '../config.ts';
+import { saveToken } from './tokenStore.ts';
+import type { PolarToken } from './tokenStore.ts';
+import { polarRequest } from './polarApi.ts';
 
-export function getAuthUrl() {
+export function getAuthUrl(): string {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: config.polar.clientId,
@@ -11,7 +12,7 @@ export function getAuthUrl() {
   return `${config.polar.authUrl}?${params}`;
 }
 
-export async function exchangeCode(code) {
+export async function exchangeCode(code: string): Promise<PolarToken> {
   const credentials = Buffer.from(
     `${config.polar.clientId}:${config.polar.clientSecret}`
   ).toString('base64');
@@ -35,7 +36,7 @@ export async function exchangeCode(code) {
     throw new Error(`Token exchange failed: ${res.status} ${text}`);
   }
 
-  const tokenData = await res.json();
+  const tokenData: PolarToken = await res.json();
   await saveToken(tokenData);
 
   // Register user with Polar AccessLink
@@ -44,7 +45,7 @@ export async function exchangeCode(code) {
   return tokenData;
 }
 
-async function registerUser(accessToken, userId) {
+async function registerUser(accessToken: string, userId: number): Promise<void> {
   try {
     await polarRequest(accessToken, '/users', {
       method: 'POST',
