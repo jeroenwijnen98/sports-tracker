@@ -1,3 +1,5 @@
+// @ts-check
+
 import { getAll, put, add, del } from '../db.js';
 import { createShoeCard } from '../components/shoeCard.js';
 import { openModal, closeModal } from '../components/modal.js';
@@ -5,7 +7,9 @@ import { showToast } from '../components/toast.js';
 import { recalcShoeKm } from '../sync.js';
 import { escapeHtml } from '../utils/html.js';
 
-const panel = document.getElementById('tab-shoes');
+/** @typedef {import('../../../types/domain.ts').Shoe} Shoe */
+
+const panel = /** @type {HTMLElement} */ (document.getElementById('tab-shoes'));
 
 export async function renderShoes() {
   const shoes = await getAll('shoes');
@@ -27,7 +31,7 @@ export async function renderShoes() {
   `;
   panel.appendChild(header);
 
-  header.querySelector('#add-shoe-btn').addEventListener('click', () => {
+  header.querySelector('#add-shoe-btn')?.addEventListener('click', () => {
     openShoeModal();
   });
 
@@ -57,6 +61,7 @@ export async function renderShoes() {
   panel.appendChild(list);
 }
 
+/** @param {Shoe | null} [shoe] */
 function openShoeModal(shoe = null) {
   const isEdit = !!shoe;
   const title = isEdit ? 'Schoen bewerken' : 'Schoen toevoegen';
@@ -90,26 +95,31 @@ function openShoeModal(shoe = null) {
     </form>
   `);
 
-  document.getElementById('modal-close').addEventListener('click', closeModal);
-  document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  document.getElementById('shoe-name').focus();
+  const nameInput = /** @type {HTMLInputElement} */ (document.getElementById('shoe-name'));
+  const brandInput = /** @type {HTMLInputElement} */ (document.getElementById('shoe-brand'));
+  const initialKmInput = /** @type {HTMLInputElement} */ (document.getElementById('shoe-initial-km'));
 
-  document.getElementById('shoe-form').addEventListener('submit', async (e) => {
+  document.getElementById('modal-close')?.addEventListener('click', closeModal);
+  document.getElementById('modal-cancel')?.addEventListener('click', closeModal);
+  nameInput.focus();
+
+  document.getElementById('shoe-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = document.getElementById('shoe-name').value.trim();
-    const brand = document.getElementById('shoe-brand').value.trim();
-    const initialKm = parseFloat(document.getElementById('shoe-initial-km').value) || 0;
+    const name = nameInput.value.trim();
+    const brand = brandInput.value.trim();
+    const initialKm = parseFloat(initialKmInput.value) || 0;
 
     if (!name) return;
 
-    if (isEdit) {
+    if (shoe) {
       shoe.name = name;
       shoe.brand = brand;
       shoe.initialKm = initialKm;
       await put('shoes', shoe);
-      await recalcShoeKm(shoe.id);
+      if (shoe.id !== undefined) await recalcShoeKm(shoe.id);
       showToast('Schoen bijgewerkt', 'success');
     } else {
+      /** @type {Shoe} */
       const newShoe = { name, brand, initialKm, totalKm: initialKm, isDefault: false };
       // If this is the first shoe, make it default
       const existing = await getAll('shoes');
@@ -125,24 +135,27 @@ function openShoeModal(shoe = null) {
   });
 }
 
+/** @param {Shoe} shoe */
 async function deleteShoe(shoe) {
+  const { id } = shoe;
+  if (id === undefined) return;
   if (!confirm(`"${shoe.name}" verwijderen?`)) return;
 
   // Unassign exercises from this shoe
-  const { getAll: getAllExercises, put: putExercise } = await import('../db.js');
-  const exercises = await getAllExercises('exercises');
+  const exercises = await getAll('exercises');
   for (const ex of exercises) {
-    if (ex.shoeId === shoe.id) {
+    if (ex.shoeId === id) {
       delete ex.shoeId;
-      await putExercise('exercises', ex);
+      await put('exercises', ex);
     }
   }
 
-  await del('shoes', shoe.id);
+  await del('shoes', id);
   showToast('Schoen verwijderd', 'success');
   await renderShoes();
 }
 
+/** @param {Shoe} shoe */
 async function setDefaultShoe(shoe) {
   const shoes = await getAll('shoes');
   for (const s of shoes) {

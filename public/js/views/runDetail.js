@@ -1,3 +1,5 @@
+// @ts-check
+
 import { get, del } from '../db.js';
 import { getDetailData, retryDetailData } from '../services/detailData.js';
 import { recalcShoeKm } from '../sync.js';
@@ -9,9 +11,21 @@ import { escapeHtml } from '../utils/html.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
-const container = document.getElementById('run-detail-container');
+/** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
+/** @typedef {import('../../../types/domain.ts').DetailData} DetailData */
+/** @typedef {import('../../../types/domain.ts').Trackpoint} Trackpoint */
+
+/**
+ * Leaflet, as the CDN script puts it on `window.L`. Only its types come from
+ * `@types/leaflet`; the library itself is never bundled.
+ * @typedef {typeof import('leaflet')} Leaflet
+ */
+
+const container = /** @type {HTMLElement} */ (document.getElementById('run-detail-container'));
+/** @type {import('leaflet').Map | null} */
 let leafletMap = null;
 
+/** @param {string} exerciseId */
 export async function openRunDetail(exerciseId) {
   const exercise = await get('exercises', exerciseId);
   if (!exercise) return;
@@ -93,10 +107,10 @@ export async function openRunDetail(exerciseId) {
   document.body.style.overflow = 'hidden';
 
   // Back button
-  document.getElementById('run-detail-back').addEventListener('click', closeRunDetail);
+  document.getElementById('run-detail-back')?.addEventListener('click', closeRunDetail);
 
   // Delete button
-  document.getElementById('run-detail-delete').addEventListener('click', () => {
+  document.getElementById('run-detail-delete')?.addEventListener('click', () => {
     confirmDelete(exercise);
   });
 
@@ -114,6 +128,7 @@ export async function openRunDetail(exerciseId) {
   }
 }
 
+/** @param {string} exerciseId */
 function showRetryButton(exerciseId) {
   const chartSection = document.getElementById('run-detail-chart-section');
   if (!chartSection) return;
@@ -126,8 +141,8 @@ function showRetryButton(exerciseId) {
     </div>
   `;
 
-  document.getElementById('run-detail-retry-btn').addEventListener('click', async () => {
-    const retryBtn = document.getElementById('run-detail-retry-btn');
+  const retryBtn = /** @type {HTMLButtonElement} */ (document.getElementById('run-detail-retry-btn'));
+  retryBtn.addEventListener('click', async () => {
     retryBtn.textContent = 'Laden...';
     retryBtn.disabled = true;
 
@@ -158,7 +173,38 @@ export function closeRunDetail() {
 const PACE_COLOR = '#CEFF00';
 const HR_COLOR = '#FF4D6D';
 
+/** @typedef {'pace' | 'hr' | 'both'} ChartMode */
+
+/**
+ * A trackpoint reduced to what the chart needs: seconds since the start and,
+ * where known, speed in m/s.
+ * @typedef {{ d: number, t: number, hr: number | null, speed: number | null }} ChartPoint
+ */
+
+/**
+ * One plotted sample: cumulative metres, heart rate and pace in min/km.
+ * @typedef {{ d: number, hr: number | null, pace: number | null }} ChartSample
+ */
+
+/**
+ * @typedef {object} ChartSeries
+ * @property {ChartSample[]} samples
+ * @property {number} maxD Metres at the last sample.
+ * @property {boolean} hasPace
+ * @property {boolean} hasHr
+ * @property {number} paceMin
+ * @property {number} paceMax
+ * @property {number} hrMin
+ * @property {number} hrMax
+ */
+
+/** @typedef {{ top: number, right: number, bottom: number, left: number }} Padding */
+
+/** @typedef {(value: number) => number} Scale */
+
+/** @type {ChartMode} */
 let chartMode = 'pace';
+/** @type {ChartSeries | null} */
 let chartSeries = null;
 
 function chartMarkup() {
@@ -182,30 +228,35 @@ function chartMarkup() {
   `;
 }
 
+/** @param {DetailData} detail */
 function renderChart(detail) {
   chartSeries = buildChartSeries(detail);
   if (!chartSeries) return;
 
   const { hasPace, hasHr } = chartSeries;
+  /** @type {ChartMode[]} */
   const modes = [];
   if (hasPace) modes.push('pace');
   if (hasHr) modes.push('hr');
   if (hasPace && hasHr) modes.push('both');
   chartMode = modes[0];
 
-  const section = document.getElementById('run-detail-chart-section');
+  const section = /** @type {HTMLElement} */ (document.getElementById('run-detail-chart-section'));
   section.style.display = '';
 
-  const toggle = document.getElementById('chart-toggle');
+  const toggle = /** @type {HTMLElement} */ (document.getElementById('chart-toggle'));
   toggle.style.display = modes.length > 1 ? '' : 'none';
-  toggle.querySelectorAll('.run-detail-chart-toggle-btn').forEach((btn) => {
-    const available = modes.includes(btn.dataset.mode);
+  /** @type {NodeListOf<HTMLElement>} */
+  const buttons = toggle.querySelectorAll('.run-detail-chart-toggle-btn');
+  buttons.forEach((btn) => {
+    const mode = /** @type {ChartMode} */ (btn.dataset.mode);
+    const available = modes.includes(mode);
     btn.style.display = available ? '' : 'none';
     btn.classList.toggle('active', btn.dataset.mode === chartMode);
     if (!available) return;
     btn.addEventListener('click', () => {
-      chartMode = btn.dataset.mode;
-      toggle.querySelectorAll('.run-detail-chart-toggle-btn').forEach((b) =>
+      chartMode = mode;
+      buttons.forEach((b) =>
         b.classList.toggle('active', b.dataset.mode === chartMode)
       );
       drawChart();
@@ -220,15 +271,22 @@ function renderChart(detail) {
 /**
  * Flatten trackpoints into { d, pace, hr } samples.
  * Polar doesn't always record <Speed>, so pace falls back to distance/time deltas.
+ *
+ * @param {DetailData} detail
+ * @returns {ChartSeries | null}
  */
 function buildChartSeries(detail) {
+  /** @type {ChartPoint[]} */
   let points = (detail.allTrackpoints || [])
-    .filter((tp) => tp.distance !== null && tp.time)
+    .filter(
+      /** @returns {tp is Trackpoint & { distance: number, time: string }} */
+      (tp) => tp.distance !== null && !!tp.time
+    )
     .map((tp, i, arr) => ({
       d: tp.distance,
       t: (Date.parse(tp.time) - Date.parse(arr[0].time)) / 1000,
       hr: tp.heartRate,
-      speed: tp.speed > 0 ? tp.speed : null,
+      speed: tp.speed !== null && tp.speed > 0 ? tp.speed : null,
     }));
 
   if (points.length < 2) return null;
@@ -253,11 +311,11 @@ function buildChartSeries(detail) {
     d: p.d,
     hr: p.hr,
     // min/km; standing still (< 1 m/s) leaves a gap instead of a spike
-    pace: p.speed > 1 ? Math.min(1000 / 60 / p.speed, 15) : null,
+    pace: p.speed !== null && p.speed > 1 ? Math.min(1000 / 60 / p.speed, 15) : null,
   }));
 
   const paces = samples.map((p) => p.pace).filter((v) => v !== null);
-  const hrs = samples.map((p) => p.hr).filter((v) => v);
+  const hrs = samples.map((p) => p.hr).filter(/** @returns {v is number} */ (v) => !!v);
 
   return {
     samples,
@@ -271,13 +329,20 @@ function buildChartSeries(detail) {
   };
 }
 
+/**
+ * @param {ChartPoint[]} points
+ * @param {'speed' | 'hr'} key
+ * @param {number} window Samples on either side.
+ * @returns {ChartPoint[]}
+ */
 function rollingAverage(points, key, window) {
   return points.map((p, i) => {
     let sum = 0;
     let count = 0;
     for (let j = Math.max(0, i - window); j <= Math.min(points.length - 1, i + window); j++) {
-      if (points[j][key] != null) {
-        sum += points[j][key];
+      const value = points[j][key];
+      if (value != null) {
+        sum += value;
         count++;
       }
     }
@@ -285,12 +350,27 @@ function rollingAverage(points, key, window) {
   });
 }
 
-/** Current chart geometry, kept around so the scrub cursor can reuse it. */
+/**
+ * @typedef {object} ChartGeometry
+ * @property {Scale} xScale
+ * @property {Scale} paceScale
+ * @property {Scale} hrScale
+ * @property {Padding} pad
+ * @property {number} plotH
+ * @property {boolean} showPace
+ * @property {boolean} showHr
+ */
+
+/**
+ * Current chart geometry, kept around so the scrub cursor can reuse it.
+ * @type {ChartGeometry | null}
+ */
 let chartGeometry = null;
 
 function drawChart() {
-  const canvas = document.getElementById('run-detail-chart');
-  if (!canvas || !chartSeries) return;
+  const canvas = /** @type {HTMLCanvasElement | null} */ (document.getElementById('run-detail-chart'));
+  const series = chartSeries;
+  if (!canvas || !series) return;
 
   const legend = document.getElementById('chart-legend');
   if (legend) legend.style.display = chartMode === 'both' ? '' : 'none';
@@ -298,16 +378,20 @@ function drawChart() {
   const { ctx, w, h } = chartContext(canvas);
   const showPace = chartMode === 'pace' || chartMode === 'both';
   const showHr = chartMode === 'hr' || chartMode === 'both';
+  /** @type {Padding} */
   const pad = { top: 16, right: chartMode === 'both' ? 42 : 12, bottom: 22, left: 42 };
   const plotW = w - pad.left - pad.right;
   const plotH = h - pad.top - pad.bottom;
 
-  const [paceLo, paceHi] = axisBounds(chartSeries.paceMin, chartSeries.paceMax);
-  const [hrLo, hrHi] = axisBounds(chartSeries.hrMin, chartSeries.hrMax);
+  const [paceLo, paceHi] = axisBounds(series.paceMin, series.paceMax);
+  const [hrLo, hrHi] = axisBounds(series.hrMin, series.hrMax);
 
-  const xScale = (d) => pad.left + (d / chartSeries.maxD) * plotW;
+  /** @type {Scale} */
+  const xScale = (d) => pad.left + (d / series.maxD) * plotW;
   // Pace is inverted: a lower min/km is faster, so it sits higher on the chart.
+  /** @type {Scale} */
   const paceScale = (v) => pad.top + ((v - paceLo) / (paceHi - paceLo)) * plotH;
+  /** @type {Scale} */
   const hrScale = (v) => pad.top + plotH - ((v - hrLo) / (hrHi - hrLo)) * plotH;
 
   drawGrid(ctx, w, pad, plotH);
@@ -321,35 +405,50 @@ function drawChart() {
     drawAxisLabels(ctx, pad, plotH, 'right', (i) => Math.round(hrHi - ((hrHi - hrLo) / 4) * i), HR_COLOR, plotW);
   }
 
-  drawDistanceLabels(ctx, h, pad, xScale);
+  drawDistanceLabels(ctx, h, pad, xScale, series.maxD);
 
   const solo = chartMode !== 'both';
   if (showHr) {
-    drawMetric(ctx, xScale, hrScale, 'hr', HR_COLOR, solo ? 2 : 1.75, solo ? pad.top + plotH : null, pad.top);
+    drawMetric(ctx, series.samples, xScale, hrScale, 'hr', HR_COLOR, solo ? 2 : 1.75, solo ? pad.top + plotH : null, pad.top);
   }
   if (showPace) {
-    drawMetric(ctx, xScale, paceScale, 'pace', PACE_COLOR, solo ? 2 : 2.25, solo ? pad.top + plotH : null, pad.top);
+    drawMetric(ctx, series.samples, xScale, paceScale, 'pace', PACE_COLOR, solo ? 2 : 2.25, solo ? pad.top + plotH : null, pad.top);
   }
 
   chartGeometry = { xScale, paceScale, hrScale, pad, plotH, showPace, showHr };
 }
 
+/**
+ * Size a canvas to its box at the device pixel ratio and clear it.
+ * @param {HTMLCanvasElement} canvas
+ */
 function chartContext(canvas) {
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   canvas.width = Math.max(1, rect.width * dpr);
   canvas.height = Math.max(1, rect.height * dpr);
-  const ctx = canvas.getContext('2d');
+  const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d'));
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, rect.width, rect.height);
   return { ctx, w: rect.width, h: rect.height };
 }
 
+/**
+ * @param {number} min
+ * @param {number} max
+ * @returns {[number, number]}
+ */
 function axisBounds(min, max) {
   const range = max - min || 1;
   return [min - range * 0.08, max + range * 0.08];
 }
 
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} w
+ * @param {Padding} pad
+ * @param {number} plotH
+ */
 function drawGrid(ctx, w, pad, plotH) {
   ctx.strokeStyle = '#242424';
   ctx.lineWidth = 1;
@@ -362,6 +461,15 @@ function drawGrid(ctx, w, pad, plotH) {
   }
 }
 
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {Padding} pad
+ * @param {number} plotH
+ * @param {'left' | 'right'} side
+ * @param {(i: number) => string | number} valueAt
+ * @param {string} color
+ * @param {number} [plotW]
+ */
 function drawAxisLabels(ctx, pad, plotH, side, valueAt, color, plotW = 0) {
   ctx.fillStyle = color;
   ctx.font = '11px -apple-system, sans-serif';
@@ -369,27 +477,47 @@ function drawAxisLabels(ctx, pad, plotH, side, valueAt, color, plotW = 0) {
   ctx.textBaseline = 'middle';
   for (let i = 0; i <= 4; i++) {
     const y = pad.top + (plotH / 4) * i;
-    ctx.fillText(valueAt(i), side === 'left' ? pad.left - 6 : pad.left + plotW + 6, y);
+    ctx.fillText(String(valueAt(i)), side === 'left' ? pad.left - 6 : pad.left + plotW + 6, y);
   }
 }
 
-function drawDistanceLabels(ctx, h, pad, xScale) {
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} h
+ * @param {Padding} pad
+ * @param {Scale} xScale
+ * @param {number} maxD Metres at the last sample.
+ */
+function drawDistanceLabels(ctx, h, pad, xScale, maxD) {
   ctx.fillStyle = '#666666';
   ctx.font = '11px -apple-system, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  const kmMax = chartSeries.maxD / 1000;
+  const kmMax = maxD / 1000;
   const step = kmMax <= 3 ? 0.5 : kmMax <= 8 ? 1 : kmMax <= 20 ? 2 : 5;
   for (let km = 0; km <= kmMax + 1e-6; km += step) {
     ctx.fillText(kmMax <= 3 ? km.toFixed(1) : String(km), xScale(km * 1000), h - pad.bottom + 5);
   }
 }
 
-/** Draw one metric as a line, splitting on gaps; `areaBase` adds a gradient fill. */
-function drawMetric(ctx, xScale, yScale, key, color, lineWidth, areaBase, top) {
+/**
+ * Draw one metric as a line, splitting on gaps; `areaBase` adds a gradient fill.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {ChartSample[]} samples
+ * @param {Scale} xScale
+ * @param {Scale} yScale
+ * @param {'hr' | 'pace'} key
+ * @param {string} color
+ * @param {number} lineWidth
+ * @param {number | null} areaBase
+ * @param {number} top
+ */
+function drawMetric(ctx, samples, xScale, yScale, key, color, lineWidth, areaBase, top) {
+  /** @type {ChartSample[][]} */
   const segments = [];
+  /** @type {ChartSample[]} */
   let current = [];
-  for (const sample of chartSeries.samples) {
+  for (const sample of samples) {
     if (sample[key] == null) {
       if (current.length) segments.push(current);
       current = [];
@@ -407,7 +535,7 @@ function drawMetric(ctx, xScale, yScale, key, color, lineWidth, areaBase, top) {
     for (const segment of segments) {
       ctx.beginPath();
       ctx.moveTo(xScale(segment[0].d), areaBase);
-      for (const sample of segment) ctx.lineTo(xScale(sample.d), yScale(sample[key]));
+      for (const sample of segment) ctx.lineTo(xScale(sample.d), yScale(/** @type {number} */ (sample[key])));
       ctx.lineTo(xScale(segment[segment.length - 1].d), areaBase);
       ctx.closePath();
       ctx.fill();
@@ -421,7 +549,7 @@ function drawMetric(ctx, xScale, yScale, key, color, lineWidth, areaBase, top) {
     ctx.beginPath();
     segment.forEach((sample, i) => {
       const x = xScale(sample.d);
-      const y = yScale(sample[key]);
+      const y = yScale(/** @type {number} */ (sample[key]));
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -429,11 +557,20 @@ function drawMetric(ctx, xScale, yScale, key, color, lineWidth, areaBase, top) {
   }
 }
 
+/**
+ * @param {string} hex `#RRGGBB`
+ * @param {number} alpha
+ * @returns {string}
+ */
 function withAlpha(hex, alpha) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
+/**
+ * @param {number} minPerKm
+ * @returns {string}
+ */
 function formatPaceValue(minPerKm) {
   const min = Math.floor(minPerKm);
   const sec = Math.round((minPerKm - min) * 60);
@@ -445,12 +582,14 @@ function formatPaceValue(minPerKm) {
 function attachChartScrub() {
   const canvas = document.getElementById('run-detail-chart');
   const wrap = canvas?.parentElement;
-  if (!wrap) return;
+  if (!canvas || !wrap) return;
 
+  /** @param {MouseEvent | TouchEvent} e */
   const move = (e) => {
-    const touch = e.touches?.[0];
+    const touch = 'touches' in e ? e.touches[0] : undefined;
     const rect = canvas.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, ((touch || e).clientX - rect.left) / rect.width));
+    const { clientX } = touch || /** @type {MouseEvent} */ (e);
+    const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
     drawChartCursor(frac);
     if (touch) e.preventDefault();
   };
@@ -462,8 +601,9 @@ function attachChartScrub() {
   wrap.addEventListener('touchend', clearChartCursor);
 }
 
+/** @param {number} frac Position across the chart, 0 to 1. */
 function drawChartCursor(frac) {
-  const canvas = document.getElementById('run-detail-chart-cursor');
+  const canvas = /** @type {HTMLCanvasElement | null} */ (document.getElementById('run-detail-chart-cursor'));
   if (!canvas || !chartGeometry || !chartSeries) return;
 
   const target = frac * chartSeries.maxD;
@@ -483,6 +623,7 @@ function drawChartCursor(frac) {
   ctx.lineTo(x, pad.top + plotH);
   ctx.stroke();
 
+  /** @type {[y: number, color: string][]} */
   const dots = [];
   if (showPace && sample.pace !== null) dots.push([paceScale(sample.pace), PACE_COLOR]);
   if (showHr && sample.hr) dots.push([hrScale(sample.hr), HR_COLOR]);
@@ -501,7 +642,7 @@ function drawChartCursor(frac) {
 }
 
 function clearChartCursor() {
-  const canvas = document.getElementById('run-detail-chart-cursor');
+  const canvas = /** @type {HTMLCanvasElement | null} */ (document.getElementById('run-detail-chart-cursor'));
   if (canvas) chartContext(canvas);
   const readout = document.getElementById('chart-readout');
   if (readout) readout.textContent = '';
@@ -509,13 +650,14 @@ function clearChartCursor() {
 
 /* ── Laps ── */
 
+/** @param {DetailData} detail */
 function renderLaps(detail) {
   if (!detail.laps || detail.laps.length <= 1) return;
 
-  const section = document.getElementById('run-detail-laps-section');
+  const section = /** @type {HTMLElement} */ (document.getElementById('run-detail-laps-section'));
   section.style.display = '';
 
-  const lapsEl = document.getElementById('run-detail-laps');
+  const lapsEl = /** @type {HTMLElement} */ (document.getElementById('run-detail-laps'));
   const laps = detail.laps;
 
   // Find max distance for bar widths
@@ -568,31 +710,33 @@ function renderLaps(detail) {
 
 /* ── Map ── */
 
+/** @param {DetailData} detail */
 async function renderMap(detail) {
   if (!detail.hasGps || detail.route.length === 0) return;
 
-  const section = document.getElementById('run-detail-map-section');
+  const section = /** @type {HTMLElement} */ (document.getElementById('run-detail-map-section'));
   section.style.display = '';
 
   // Dynamically load Leaflet
-  await loadLeaflet();
+  const L = await loadLeaflet();
 
-  const mapEl = document.getElementById('run-detail-map');
-  leafletMap = L.map(mapEl, {
+  const mapEl = /** @type {HTMLElement} */ (document.getElementById('run-detail-map'));
+  const map = L.map(mapEl, {
     zoomControl: false,
     attributionControl: false,
   });
+  leafletMap = map;
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     maxZoom: 19,
-  }).addTo(leafletMap);
+  }).addTo(map);
 
   const route = detail.route;
   const polyline = L.polyline(route, {
     color: '#CEFF00',
     weight: 3,
     opacity: 0.9,
-  }).addTo(leafletMap);
+  }).addTo(map);
 
   // Start marker
   L.circleMarker(route[0], {
@@ -601,7 +745,7 @@ async function renderMap(detail) {
     fillOpacity: 1,
     color: '#0D0D0D',
     weight: 2,
-  }).addTo(leafletMap);
+  }).addTo(map);
 
   // End marker
   L.circleMarker(route[route.length - 1], {
@@ -610,13 +754,18 @@ async function renderMap(detail) {
     fillOpacity: 1,
     color: '#0D0D0D',
     weight: 2,
-  }).addTo(leafletMap);
+  }).addTo(map);
 
-  leafletMap.fitBounds(polyline.getBounds(), { padding: [20, 20] });
+  map.fitBounds(polyline.getBounds(), { padding: [20, 20] });
 }
 
+/**
+ * Load Leaflet from the CDN the first time a route is shown.
+ * @returns {Promise<Leaflet>}
+ */
 function loadLeaflet() {
-  if (window.L) return Promise.resolve();
+  const win = /** @type {Window & { L?: Leaflet }} */ (window);
+  if (win.L) return Promise.resolve(win.L);
 
   return new Promise((resolve) => {
     const link = document.createElement('link');
@@ -626,7 +775,7 @@ function loadLeaflet() {
 
     const script = document.createElement('script');
     script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.onload = resolve;
+    script.onload = () => resolve(/** @type {Leaflet} */ (win.L));
     document.head.appendChild(script);
   });
 }
@@ -640,6 +789,7 @@ function destroyMap() {
 
 /* ── Delete ── */
 
+/** @param {Exercise} exercise */
 function confirmDelete(exercise) {
   const dist = formatDistance(exercise.distance || 0);
   const date = formatDate(exercise['start-time']);
@@ -663,9 +813,9 @@ function confirmDelete(exercise) {
     </div>
   `);
 
-  document.getElementById('modal-close-btn').addEventListener('click', closeModal);
-  document.getElementById('modal-cancel').addEventListener('click', closeModal);
-  document.getElementById('modal-confirm-delete').addEventListener('click', async () => {
+  document.getElementById('modal-close-btn')?.addEventListener('click', closeModal);
+  document.getElementById('modal-cancel')?.addEventListener('click', closeModal);
+  document.getElementById('modal-confirm-delete')?.addEventListener('click', async () => {
     closeModal();
     try {
       await deleteExercise(exercise.id);

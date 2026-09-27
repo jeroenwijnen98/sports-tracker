@@ -1,8 +1,11 @@
-const overlay = document.getElementById('modal-overlay');
-const modalEl = document.getElementById('modal');
+// @ts-check
+
+const overlay = /** @type {HTMLElement} */ (document.getElementById('modal-overlay'));
+const modalEl = /** @type {HTMLElement} */ (document.getElementById('modal'));
 
 /**
  * Open a modal with given HTML content.
+ * @param {string} html
  */
 export function openModal(html) {
   modalEl.innerHTML = html;
@@ -14,6 +17,7 @@ export function openModal(html) {
   };
 
   // Close on Escape
+  /** @param {KeyboardEvent} e */
   const onKey = (e) => {
     if (e.key === 'Escape') {
       closeModal();

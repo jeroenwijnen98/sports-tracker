@@ -1,19 +1,25 @@
+// @ts-check
+
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
 import { formatDate, formatTime } from '../utils/date.js';
 import { escapeHtml } from '../utils/html.js';
 
+/** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
+
 /**
  * Create a run card element from an exercise object.
- * @param {object} exercise
- * @param {{ onClick?: (exercise) => void }} options
+ * @param {Exercise} exercise
+ * @param {{ onClick?: (exercise: Exercise) => void }} [options]
+ * @returns {HTMLDivElement}
  */
 export function createRunCard(exercise, options = {}) {
   const el = document.createElement('div');
   el.className = 'run-card';
 
-  if (options.onClick) {
+  const { onClick } = options;
+  if (onClick) {
     el.style.cursor = 'pointer';
-    el.addEventListener('click', () => options.onClick(exercise));
+    el.addEventListener('click', () => onClick(exercise));
   }
 
   const distance = exercise.distance || 0;

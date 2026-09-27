@@ -51,10 +51,13 @@ Backend files move to TypeScript that Node runs as it is (type stripping), so
 constructor parameter properties), requires `import type` for type-only imports,
 and lets relative imports name their `.ts` extension. Plain `.js` files are not
 checked until they opt in with `// @ts-check`; the frontend stays `.js` served
-as it is and is typed through JSDoc. The frontend data layer (`db.js`, `api.js`, `sync.js`,
-`session.js`, `services/` and `utils/`) is checked; `app.js`, `views/` and
-`components/` are not yet. `db.js` maps each store name to its record type, so
-`getAll('shoes')` is a `Shoe[]`.
+as it is and is typed through JSDoc. Every file in `public/js/` opts in, so a
+new frontend file should start with `// @ts-check` too. `db.js` maps each store
+name to its record type, so `getAll('shoes')` is a `Shoe[]`. Elements the page
+always has are cast from `getElementById` with `/** @type {HTMLElement} */`.
+Leaflet is typed by the `@types/leaflet` dev dependency only: `runDetail.js`
+names it `typeof import('leaflet')` in JSDoc and `loadLeaflet()` returns the
+`window.L` the CDN script sets, so nothing imports it at run time.
 
 The shared domain types live in `types/domain.ts` (exercise, lap, trackpoint,
 route, detail data, shoe, heart rate sensor, smoothness). Server code imports

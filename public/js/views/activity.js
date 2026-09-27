@@ -1,14 +1,28 @@
+// @ts-check
+
 import { getAll } from '../db.js';
 import { formatDuration, parseISODuration } from '../utils/format.js';
+
+/** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
+
+/** @typedef {'W' | 'M' | 'Y' | 'All'} Mode */
+
+/**
+ * One bar of the chart: the kilometres run in one day, week, month or year.
+ * @typedef {{ km: number, label: string, startDay?: number, key?: string, year?: number }} Bar
+ */
+
+/** @typedef {{ filtered: Exercise[], bars: Bar[], periodLabel: string }} PeriodData */
 
 const MONTH_LABELS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
 const MONTH_NAMES = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
 const DAY_LABELS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 
+/** @type {Mode} */
 let currentMode = 'Y';
 
 export async function renderActivity() {
-  const container = document.getElementById('tab-activity');
+  const container = /** @type {HTMLElement} */ (document.getElementById('tab-activity'));
   const allExercises = await getAll('exercises');
   const exercises = allExercises.filter((ex) => !ex.overlap);
 
@@ -106,7 +120,7 @@ export async function renderActivity() {
 
   container.querySelectorAll('.activity-toggle-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      currentMode = btn.dataset.mode;
+      currentMode = /** @type {Mode} */ (/** @type {HTMLElement} */ (btn).dataset.mode);
       renderActivity();
     });
   });
@@ -114,6 +128,11 @@ export async function renderActivity() {
 
 /* ── Data builders ── */
 
+/**
+ * @param {Mode} mode
+ * @param {Exercise[]} exercises
+ * @returns {PeriodData}
+ */
 function getData(mode, exercises) {
   const now = new Date();
   switch (mode) {
@@ -123,11 +142,16 @@ function getData(mode, exercises) {
       return buildMonthData(exercises, now);
     case 'Y':
       return buildYearData(exercises, now);
-    case 'All':
+    default:
       return buildAllData(exercises, now);
   }
 }
 
+/**
+ * @param {Exercise[]} exercises
+ * @param {Date} now
+ * @returns {PeriodData}
+ */
 function buildWeekData(exercises, now) {
   const day = now.getDay();
   const diff = day === 0 ? -6 : 1 - day;
@@ -154,6 +178,11 @@ function buildWeekData(exercises, now) {
   return { filtered, bars, periodLabel: 'Deze week' };
 }
 
+/**
+ * @param {Exercise[]} exercises
+ * @param {Date} now
+ * @returns {PeriodData}
+ */
 function buildMonthData(exercises, now) {
   const year = now.getFullYear();
   const month = now.getMonth();
@@ -166,18 +195,17 @@ function buildMonthData(exercises, now) {
     return d >= firstDay && d <= lastDay;
   });
 
+  /** @type {number[]} */
   const starts = [];
   for (let d = 1; d <= daysInMonth; d += 7) starts.push(d);
 
-  const bars = starts.map((start, i) => {
-    const end = i < starts.length - 1 ? starts[i + 1] - 1 : daysInMonth;
-    return { km: 0, label: String(start), startDay: start, endDay: end };
-  });
+  /** @type {Bar[]} */
+  const bars = starts.map((start) => ({ km: 0, label: String(start), startDay: start }));
 
   for (const ex of filtered) {
     const d = new Date(ex['start-time']).getDate();
     for (let i = bars.length - 1; i >= 0; i--) {
-      if (d >= bars[i].startDay) {
+      if (d >= /** @type {number} */ (bars[i].startDay)) {
         bars[i].km += (ex.distance || 0) / 1000;
         break;
       }
@@ -188,6 +216,11 @@ function buildMonthData(exercises, now) {
   return { filtered, bars, periodLabel: `${name.charAt(0).toUpperCase() + name.slice(1)} ${year}` };
 }
 
+/**
+ * @param {Exercise[]} exercises
+ * @param {Date} now
+ * @returns {PeriodData}
+ */
 function buildYearData(exercises, now) {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth();
@@ -199,6 +232,7 @@ function buildYearData(exercises, now) {
     return d >= startDate && d <= endDate;
   });
 
+  /** @type {Bar[]} */
   const bars = [];
   for (let i = 0; i < 12; i++) {
     const d = new Date(currentYear, currentMonth - 11 + i, 1);
@@ -219,6 +253,11 @@ function buildYearData(exercises, now) {
   return { filtered, bars, periodLabel };
 }
 
+/**
+ * @param {Exercise[]} exercises
+ * @param {Date} now
+ * @returns {PeriodData}
+ */
 function buildAllData(exercises, now) {
   if (exercises.length === 0) {
     const y = now.getFullYear();
@@ -234,6 +273,7 @@ function buildAllData(exercises, now) {
   }
   maxYear = Math.max(maxYear, now.getFullYear());
 
+  /** @type {Bar[]} */
   const bars = [];
   for (let y = minYear; y <= maxYear; y++) {
     bars.push({ km: 0, label: String(y), year: y });
@@ -252,6 +292,11 @@ function buildAllData(exercises, now) {
 
 /* ── Helpers ── */
 
+/**
+ * @param {number} durationSeconds
+ * @param {number} distanceMeters
+ * @returns {string}
+ */
 function formatPaceNRC(durationSeconds, distanceMeters) {
   if (!distanceMeters || distanceMeters === 0) return "--'--''";
   const paceSeconds = durationSeconds / (distanceMeters / 1000);
@@ -260,6 +305,10 @@ function formatPaceNRC(durationSeconds, distanceMeters) {
   return `${min}'${String(sec).padStart(2, '0')}''`;
 }
 
+/**
+ * @param {number} maxVal
+ * @returns {{ ticks: number[], niceMax: number }}
+ */
 function computeYAxis(maxVal) {
   if (maxVal <= 0) return { ticks: [3, 2, 1], niceMax: 3 };
   let step;
@@ -273,11 +322,19 @@ function computeYAxis(maxVal) {
   return { ticks: [niceMax, step * 2, step], niceMax };
 }
 
+/**
+ * @param {number} val
+ * @returns {string}
+ */
 function fmtBar(val) {
   if (val >= 10) return Math.round(val).toString();
   return val.toFixed(1);
 }
 
+/**
+ * @param {number} val
+ * @returns {string}
+ */
 function fmtTick(val) {
   if (Number.isInteger(val)) return val.toString();
   return val.toFixed(1);
