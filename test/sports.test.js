@@ -4,6 +4,8 @@ import { RUNNING_SPORTS, isRunningSport, isRunningSportName } from '../public/js
 import { sportLabel } from '../public/js/utils/format.js';
 import { polarJsonToExercise } from '../src/services/importConverters.ts';
 
+/** @typedef {import('../src/services/importConverters.ts').ExportSession} ExportSession */
+
 test('the running sports are road, trail, treadmill and ultra running', () => {
   assert.deepEqual(RUNNING_SPORTS, ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING']);
 });
@@ -31,7 +33,7 @@ test('sportLabel names each running sport', () => {
 });
 
 test('a Polar data export keeps its sport name', () => {
-  /** @type {(sport: string | undefined) => import('../src/services/importConverters.ts').ExportSession} */
+  /** @type {(sport: string | undefined) => ExportSession} */
   const session = (sport) => ({ exercises: [{ sport, startTime: '2000-01-01T08:00:00.000', duration: 'PT30M' }] });
   assert.equal(polarJsonToExercise(session('TRAIL_RUNNING'))['detailed-sport-info'], 'TRAIL_RUNNING');
   assert.equal(polarJsonToExercise(session('CYCLING'))['detailed-sport-info'], 'CYCLING');
