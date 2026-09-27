@@ -4,9 +4,11 @@ import { tokenCheck } from '../middleware/tokenCheck.ts';
 import { polarRequest, XML_ACCEPT } from '../services/polarApi.ts';
 import { syncFromPolar } from '../services/polarSync.ts';
 import { readCache, appendToCache, removeFromCache } from '../services/exerciseCache.ts';
-import { readXmlCache, writeXmlCache } from '../services/xmlCache.ts';
+import { readXmlCache, writeXmlCache, isXmlType } from '../services/xmlCache.ts';
 import { withHrSensor } from '../services/hrSensor.ts';
 import { polarJsonToTcx, polarJsonToExercise, extractTcxMetadata } from '../services/importConverters.ts';
+import type { ExportSession } from '../services/importConverters.ts';
+import type { Exercise } from '../../types/domain.ts';
 
 const router = Router();
 
@@ -14,13 +16,14 @@ router.use(tokenCheck);
 
 router.get('/exercises', async (req, res) => {
   try {
-    await syncFromPolar({ accessToken: req.accessToken, userId: req.polarUserId });
+    // tokenCheck has set both, or the request never got here
+    await syncFromPolar({ accessToken: req.accessToken!, userId: req.polarUserId! });
 
     // Return all cached exercises (combines both sources)
     const all = await readCache();
     res.json(await withHrSensor(all));
   } catch (err) {
-    console.error('Exercises fetch error:', err.message);
+    console.error('Exercises fetch error:', (err as Error).message);
     res.status(502).json({ error: 'Failed to fetch exercises from Polar' });
   }
 });
@@ -30,7 +33,7 @@ router.get('/exercises/cached', async (req, res) => {
     const cached = await readCache();
     res.json(await withHrSensor(cached));
   } catch (err) {
-    console.error('Cache read error:', err.message);
+    console.error('Cache read error:', (err as Error).message);
     res.json([]);
   }
 });
@@ -42,14 +45,14 @@ router.delete('/exercises/:id', async (req, res) => {
     console.log(`[Cache] Deleted exercise ${req.params.id}`);
     res.status(204).end();
   } catch (err) {
-    console.error('Exercise delete error:', err.message);
+    console.error('Exercise delete error:', (err as Error).message);
     res.status(500).json({ error: 'Verwijderen mislukt' });
   }
 });
 
 router.get('/exercises/:id/:type', async (req, res, next) => {
   const { id, type } = req.params;
-  if (!XML_ACCEPT[type]) return next();
+  if (!isXmlType(type)) return next();
 
   // Serve from server-side cache (populated during sync transaction)
   const cached = await readXmlCache(type, id);
@@ -59,7 +62,7 @@ router.get('/exercises/:id/:type', async (req, res, next) => {
 
   // Fallback: try Training Data API (works outside transactions)
   try {
-    const polarRes = await polarRequest(req.accessToken, `/exercises/${id}/${type}`, { accept: XML_ACCEPT[type] });
+    const polarRes = await polarRequest(req.accessToken!, `/exercises/${id}/${type}`, { accept: XML_ACCEPT[type] });
     const xml = await polarRes.text();
     await writeXmlCache(type, id, xml);
     console.log(`[Polar] Fetched & cached ${type.toUpperCase()} for ${id} via Training Data API`);
@@ -73,7 +76,7 @@ router.get('/exercises/:id/:type', async (req, res, next) => {
 
 router.post('/exercises/import', express.text({ type: 'text/xml', limit: '5mb' }), async (req, res) => {
   try {
-    const xml = req.body;
+    const xml: unknown = req.body;
     if (!xml || typeof xml !== 'string') {
       return res.status(400).json({ error: 'Geen TCX data ontvangen' });
     }
@@ -88,12 +91,13 @@ router.post('/exercises/import', express.text({ type: 'text/xml', limit: '5mb' }
 
     // Save TCX to xml cache and exercise to exercise cache
     await writeXmlCache('tcx', exercise.id, xml);
-    await appendToCache([exercise]);
+    // A TCX without <Id> is stored with a null start time, as it always was
+    await appendToCache([exercise as Exercise]);
 
     console.log(`[Import] Imported TCX exercise ${exercise.id} (${exercise['start-time']})`);
     res.json(exercise);
   } catch (err) {
-    console.error('TCX import error:', err.message);
+    console.error('TCX import error:', (err as Error).message);
     res.status(500).json({ error: 'Import mislukt' });
   }
 });
@@ -101,7 +105,7 @@ router.post('/exercises/import', express.text({ type: 'text/xml', limit: '5mb' }
 // Polar JSON data export import
 router.post('/exercises/import-json', express.json({ limit: '10mb' }), async (req, res) => {
   try {
-    const session = req.body;
+    const session: ExportSession | undefined = req.body;
     if (!session?.exercises?.length) {
       return res.status(400).json({ error: 'Geen training sessie gevonden in JSON' });
     }
@@ -122,7 +126,7 @@ router.post('/exercises/import-json', express.json({ limit: '10mb' }), async (re
     console.log(`[Import] Imported JSON exercise ${exercise.id} (${exercise['start-time']}, ${exercise['detailed-sport-info']})`);
     res.json(exercise);
   } catch (err) {
-    console.error('JSON import error:', err.message);
+    console.error('JSON import error:', (err as Error).message);
     res.status(500).json({ error: 'Import mislukt' });
   }
 });

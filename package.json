@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js",
+    "dev": "node server.ts",
+    "start": "node server.ts",
     "test": "node --test 'test/**/*.test.js'",
     "typecheck": "tsc -p .",
     "sandcastle": "npx tsx .sandcastle/main.mts"

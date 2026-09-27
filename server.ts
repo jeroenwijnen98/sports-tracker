@@ -1,7 +1,7 @@
 import express from 'express';
 import { config } from './src/config.ts';
-import authRoutes from './src/routes/auth.js';
-import apiRoutes from './src/routes/api.js';
+import authRoutes from './src/routes/auth.ts';
+import apiRoutes from './src/routes/api.ts';
 import { attachIdleShutdown } from './src/services/idleShutdown.ts';
 
 const app = express();

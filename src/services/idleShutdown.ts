@@ -7,7 +7,7 @@
 // does return to zero RAM.
 //
 // Only active when SPORTS_AUTOQUIT=1 (set by SportsTracker.app). Running
-// `node server.js` by hand keeps the server up as before.
+// `node server.ts` by hand keeps the server up as before.
 
 import type { Express } from 'express';
 

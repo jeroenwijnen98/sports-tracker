@@ -6,6 +6,11 @@ import { recordHrSensor } from './hrSensor.ts';
 /** The two kinds of exercise XML kept on disk, each in its own directory. */
 export type XmlType = 'tcx' | 'gpx';
 
+/** Whether a route parameter names one of the XML types, so it can index by it. */
+export function isXmlType(type: string): type is XmlType {
+  return type === 'tcx' || type === 'gpx';
+}
+
 /**
  * Read cached XML (TCX/GPX) for an exercise.
  * Returns the XML string or null if not cached.

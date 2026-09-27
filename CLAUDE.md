@@ -20,7 +20,7 @@ survive: hitting `/auth/*` sets a 5-minute hold, or the server would quit while
 the browser sits on flow.polar.com and `/auth/callback` would find a dead port.
 
 ```bash
-node server.js          # starts Express on http://localhost:3000
+node server.ts          # starts Express on http://localhost:3000
 ```
 
 Started by hand like that, autoquit is **off** and the server runs until killed —
@@ -62,9 +62,10 @@ them with `import type`; frontend files reference them with a JSDoc
 `@typedef {import('../../types/domain.ts').Exercise} Exercise`, so the browser
 never loads the file. Change a shape there, not in two places.
 
-Config, the `tokenCheck` middleware and every service in `src/services/` are
-`.ts`; `server.js`, the routes and `scripts/` are still `.js` and import them by
-their `.ts` name. What `tokenCheck` adds to the request (`accessToken`,
+The whole backend is `.ts`: the server entry `server.ts`, the routes, config,
+the `tokenCheck` middleware and every service in `src/services/`. Only
+`scripts/` is still `.js` and imports them by their `.ts` name. Type stripping
+needs Node 22.18 or later. What `tokenCheck` adds to the request (`accessToken`,
 `polarUserId`) is declared in `types/express.d.ts`.
 
 ## Tests
@@ -93,9 +94,9 @@ their `smoothness` and `label`, so update it when recalibrating.
 
 **Backend (src/):** Node.js + Express, services in TypeScript run by Node as they are, with only two dependencies (`express`, `dotenv`). ES modules throughout (`"type": "module"`).
 
-- `server.js` — Entry point, mounts routes and serves `public/` as static files
-- `src/routes/auth.js` — OAuth2 flow: `/auth/login`, `/auth/callback`, `/auth/status`, `/auth/logout`
-- `src/routes/api.js` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (DELETE only, to remove it from the exercise cache), `/api/exercises/:id/:type` (one handler for `tcx` and `gpx`; any other type falls through to 404), plus the `/api/exercises/import` (TCX) and `/import-json` (Polar data export) routes. Protected by `tokenCheck` middleware
+- `server.ts` — Entry point, mounts routes and serves `public/` as static files
+- `src/routes/auth.ts` — OAuth2 flow: `/auth/login`, `/auth/callback`, `/auth/status`, `/auth/logout`
+- `src/routes/api.ts` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (DELETE only, to remove it from the exercise cache), `/api/exercises/:id/:type` (one handler for `tcx` and `gpx`; any other type falls through to 404), plus the `/api/exercises/import` (TCX) and `/import-json` (Polar data export) routes. Protected by `tokenCheck` middleware
 - `src/services/importConverters.ts` — Pure converters behind the import routes: `polarJsonToTcx(session)`, `polarJsonToExercise(session)`, `extractTcxMetadata(xml)`. Both import paths derive the same `import-…` id from the start time
 - `src/services/polarApi.ts` — `polarRequest(accessToken, pathOrUrl, { method, accept, body })` is the one AccessLink HTTP helper (auth header, Accept, throw on non-2xx); everything that talks to AccessLink goes through it. `XML_ACCEPT` maps `tcx`/`gpx` to their Accept types. Also implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit), eagerly fetching and caching TCX/GPX during the transaction before commit
 - `src/services/polarSync.ts` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.js`

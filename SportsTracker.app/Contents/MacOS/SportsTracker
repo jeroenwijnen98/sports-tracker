@@ -7,14 +7,14 @@
 # SportsTracker.app sits in the repo. Falls back to the original checkout so the
 # bundle keeps working if it is moved to /Applications.
 APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
-if [ ! -f "$APP_DIR/server.js" ]; then
+if [ ! -f "$APP_DIR/server.ts" ]; then
   APP_DIR="/Users/marcwijnen/Developer/sports-tracker"
 fi
 cd "$APP_DIR" || exit 1
 
 fail() { osascript -e "display alert \"Sports Tracker\" message \"$1\""; exit 1; }
 
-[ -f "$APP_DIR/server.js" ] || fail "Could not find the project at $APP_DIR"
+[ -f "$APP_DIR/server.ts" ] || fail "Could not find the project at $APP_DIR"
 
 # The server reads PORT from .env, so read it from the same place rather than
 # hard-coding a number that would silently drift.
@@ -41,7 +41,7 @@ fi
 # -sTCP:LISTEN matters: a plain `lsof -ti:$PORT` also matches browser tabs
 # connected to the server, so a stale tab would look like a running server.
 if [ -z "$(lsof -ti:$PORT -sTCP:LISTEN)" ]; then
-  SPORTS_AUTOQUIT=1 nohup "$NODE" server.js >/dev/null 2>&1 &
+  SPORTS_AUTOQUIT=1 nohup "$NODE" server.ts >/dev/null 2>&1 &
   for _ in {1..30}; do
     sleep 0.2
     curl -sf -o /dev/null "http://localhost:$PORT" && break

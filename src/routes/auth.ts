@@ -11,7 +11,7 @@ router.get('/login', (req, res) => {
 router.get('/callback', async (req, res) => {
   const { code, error } = req.query;
 
-  if (error) {
+  if (error || typeof code !== 'string') {
     return res.redirect('/?auth=error');
   }
 
@@ -19,7 +19,7 @@ router.get('/callback', async (req, res) => {
     await exchangeCode(code);
     res.redirect('/?auth=success');
   } catch (err) {
-    console.error('OAuth callback error:', err.message);
+    console.error('OAuth callback error:', (err as Error).message);
     res.redirect('/?auth=error');
   }
 });

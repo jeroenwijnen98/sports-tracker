@@ -25,6 +25,6 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["server.js", "src", "scripts", "public/js", "test", "types"],
+  "include": ["server.ts", "src", "scripts", "public/js", "test", "types"],
   "exclude": ["node_modules", "src/data"]
 }
