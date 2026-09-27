@@ -1,4 +1,12 @@
 import 'dotenv/config';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Every file-backed store lives under this directory. Tests point
+// SPORTS_DATA_DIR at a temp directory so they never touch the real data.
+export const DATA_DIR = process.env.SPORTS_DATA_DIR
+  ? resolve(process.env.SPORTS_DATA_DIR)
+  : join(dirname(fileURLToPath(import.meta.url)), 'data');
 
 export const config = {
   port: process.env.PORT || 3000,

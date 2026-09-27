@@ -1,9 +1,8 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { DATA_DIR } from '../config.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const CACHE_PATH = join(__dirname, '..', 'data', 'hrSensor.json');
+const CACHE_PATH = join(DATA_DIR, 'hrSensor.json');
 
 /**
  * Infers whether an exercise was recorded with a chest strap or with the

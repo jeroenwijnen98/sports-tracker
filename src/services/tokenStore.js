@@ -1,9 +1,8 @@
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { DATA_DIR } from '../config.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const TOKEN_PATH = join(__dirname, '..', 'data', 'token.json');
+const TOKEN_PATH = join(DATA_DIR, 'token.json');
 
 export async function getToken() {
   try {

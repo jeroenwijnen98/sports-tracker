@@ -1,10 +1,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { DATA_DIR } from '../config.js';
 import { recordHrSensor } from './hrSensor.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '..', 'data');
 
 /**
  * Read cached XML (TCX/GPX) for an exercise.

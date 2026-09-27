@@ -10,9 +10,10 @@ import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classifyHrSensor, writeSensorCache } from '../src/services/hrSensor.js';
+import { DATA_DIR } from '../src/config.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const TCX_DIR = join(__dirname, '..', 'src', 'data', 'tcx');
+const TCX_DIR = join(DATA_DIR, 'tcx');
 const TRUTH_PATH = join(__dirname, '..', 'src', 'services', 'hrSensorTruth.json');
 
 async function main() {

@@ -34,7 +34,8 @@ Explore the repo and fill your context window with relevant information that wil
 
 # EXECUTION
 
-There is no test suite. Your checks are the type checker and a smoke boot.
+Your checks are `npm test`, the type checker and a smoke boot. Add tests for
+pure logic you change; see the Tests section of `CLAUDE.md`.
 
 Frontend files in `public/` are served to the browser as they are: never add a
 build step, a bundler or emitted files there. Backend TypeScript runs through
@@ -42,8 +43,9 @@ Node's own type stripping, so use erasable syntax only.
 
 # FEEDBACK LOOPS
 
-1. If `package.json` has a `typecheck` script, `npm run typecheck` must pass.
-2. Smoke boot: `PORT=3999 node <server entry> > /tmp/boot.log 2>&1 &`, then
+1. `npm test` must pass.
+2. If `package.json` has a `typecheck` script, `npm run typecheck` must pass.
+3. Smoke boot: `PORT=3999 node <server entry> > /tmp/boot.log 2>&1 &`, then
    `curl -s -o /dev/null -w '%{http_code}\n'` against `/`, `/auth/status` and
    `/api/exercises`. Expect 200, 200, and 401 (no token). Kill the server afterwards.
 

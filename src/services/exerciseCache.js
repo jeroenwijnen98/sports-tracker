@@ -1,10 +1,9 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { DATA_DIR } from '../config.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const CACHE_PATH = join(__dirname, '..', 'data', 'exercises.json');
-const DELETED_PATH = join(__dirname, '..', 'data', 'deletedExercises.json');
+const CACHE_PATH = join(DATA_DIR, 'exercises.json');
+const DELETED_PATH = join(DATA_DIR, 'deletedExercises.json');
 
 export async function readCache() {
   try {

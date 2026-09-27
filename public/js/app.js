@@ -6,7 +6,7 @@ import { renderActivities } from './views/activities.js';
 import { renderActivity } from './views/activity.js';
 import { renderShoes } from './views/shoes.js';
 import { showToast } from './components/toast.js';
-import { parseISODuration } from './utils/format.js';
+import { markOverlaps } from './utils/overlap.js';
 import { keepSessionAlive } from './session.js';
 
 const authScreen = document.getElementById('auth-screen');
@@ -86,7 +86,7 @@ importFileInput.addEventListener('change', async (e) => {
   importBtn.classList.add('syncing');
   try {
     const RUNNING_SPORTS = ['RUNNING', 'TRAIL_RUNNING', 'TREADMILL_RUNNING', 'ULTRARUNNING_RUNNING'];
-    const imported = [];
+    let imported = [];
     let duplicates = 0;
 
     // Build device ID → name map from products-devices file if present
@@ -136,58 +136,14 @@ importFileInput.addEventListener('change', async (e) => {
       }
     }
 
-    // Mark overlapping sessions (e.g. Polar Beat + Polar Pacer at the same time)
-    // The phone app (Beat) gets overlap=true so it's excluded from totals but still visible
+    // Mark overlap (e.g. Polar Beat + Polar Pacer recording the same run)
     let overlapsMarked = 0;
     if (imported.length > 0) {
-      const OVERLAP_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
-      const isPhoneApp = (device) => !device || device === 'Polar Beat';
-
-      // Helper to check if two exercises overlap in time
-      const overlaps = (a, b) => {
-        const aStart = new Date(a['start-time']).getTime();
-        const aEnd = aStart + parseISODuration(a.duration) * 1000;
-        const bStart = new Date(b['start-time']).getTime();
-        const bEnd = bStart + parseISODuration(b.duration) * 1000;
-        return Math.abs(aStart - bStart) < OVERLAP_THRESHOLD_MS && aStart < bEnd && bStart < aEnd;
-      };
-
-      // 1. Within the import batch: mark phone sessions that overlap with a watch session
-      for (const ex of imported) {
-        if (!isPhoneApp(ex.device)) continue;
-        const hasWatchOverlap = imported.some((other) =>
-          other !== ex && !isPhoneApp(other.device) && overlaps(ex, other)
-        );
-        if (hasWatchOverlap) {
-          ex.overlap = true;
-          overlapsMarked++;
-        }
-      }
-
-      // 2. Cross-check against existing exercises in IndexedDB
-      const existing = await getAll('exercises');
-
-      for (const ex of imported) {
-        if (ex.overlap) continue; // already marked
-        if (isPhoneApp(ex.device)) {
-          // Importing phone — mark as overlap if DB has a watch session
-          const hasWatchInDb = existing.some((dbEx) =>
-            !isPhoneApp(dbEx.device) && overlaps(ex, dbEx)
-          );
-          if (hasWatchInDb) {
-            ex.overlap = true;
-            overlapsMarked++;
-          }
-        } else {
-          // Importing watch — mark existing phone sessions as overlap
-          for (const dbEx of existing) {
-            if (isPhoneApp(dbEx.device) && !dbEx.overlap && overlaps(ex, dbEx)) {
-              dbEx.overlap = true;
-              await put('exercises', dbEx);
-              overlapsMarked++;
-            }
-          }
-        }
+      const marked = markOverlaps(imported, await getAll('exercises'));
+      imported = marked.imported;
+      overlapsMarked = marked.count;
+      for (const ex of marked.updatedExisting) {
+        await put('exercises', ex);
       }
     }
 
