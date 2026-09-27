@@ -1,6 +1,7 @@
 import { get, del } from '../db.js';
 import { getDetailData, retryDetailData } from '../services/detailData.js';
 import { recalcShoeKm } from '../sync.js';
+import { deleteExercise } from '../api.js';
 import { renderActivities } from './activities.js';
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
 import { formatDate, formatTime } from '../utils/date.js';
@@ -665,6 +666,13 @@ function confirmDelete(exercise) {
   document.getElementById('modal-cancel').addEventListener('click', closeModal);
   document.getElementById('modal-confirm-delete').addEventListener('click', async () => {
     closeModal();
+    try {
+      await deleteExercise(exercise.id);
+    } catch (err) {
+      console.error('Delete failed:', err);
+      showToast('Verwijderen mislukt, probeer het later opnieuw', 'error');
+      return;
+    }
     const shoeId = exercise.shoeId;
     await del('exercises', exercise.id);
     if (shoeId) await recalcShoeKm(shoeId);

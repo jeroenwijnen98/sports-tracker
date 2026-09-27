@@ -1,5 +1,5 @@
 import { getExercises, polarFetch } from './polarApi.js';
-import { appendToCache } from './exerciseCache.js';
+import { appendToCache, readDeletedIds } from './exerciseCache.js';
 
 /**
  * Pull every new exercise from Polar into the server-side cache.
@@ -12,17 +12,23 @@ import { appendToCache } from './exerciseCache.js';
  *    A failure here is logged, not thrown: the transaction is already committed
  *    and its exercises cached.
  *
+ * Exercises the user deleted are skipped, or the Training Data API would hand
+ * a recent one straight back.
+ *
  * Returns how many exercises each source returned and how many were new.
  */
 export async function syncFromPolar({ accessToken, userId }) {
+  const deletedIds = await readDeletedIds();
+  const notDeleted = (exercises) => exercises.filter((e) => !deletedIds.has(String(e.id)));
+
   const transactionExercises = await getExercises(accessToken, userId);
-  let added = await appendToCache(transactionExercises);
+  let added = await appendToCache(notDeleted(transactionExercises));
 
   let fromTrainingApi = 0;
   try {
     const trainingExercises = await polarFetch(accessToken, '/exercises');
     fromTrainingApi = trainingExercises.length;
-    const addedFromTrainingApi = await appendToCache(trainingExercises);
+    const addedFromTrainingApi = await appendToCache(notDeleted(trainingExercises));
     if (addedFromTrainingApi > 0) {
       console.log(`[Polar] Added ${addedFromTrainingApi} exercises from Training Data API`);
     }

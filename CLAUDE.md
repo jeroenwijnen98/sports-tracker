@@ -46,13 +46,13 @@ There are no build steps, no linter, and no test suite. The app requires a `.env
 
 - `server.js` — Entry point, mounts routes and serves `public/` as static files
 - `src/routes/auth.js` — OAuth2 flow: `/auth/login`, `/auth/callback`, `/auth/status`, `/auth/logout`
-- `src/routes/api.js` — Polar API proxy: `/api/exercises`, `/api/exercises/:id`, `/api/exercises/:id/tcx`, `/api/exercises/:id/gpx`. Protected by `tokenCheck` middleware
+- `src/routes/api.js` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (GET, and DELETE to remove it from the exercise cache), `/api/exercises/:id/tcx`, `/api/exercises/:id/gpx`. Protected by `tokenCheck` middleware
 - `src/services/polarApi.js` — Implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit). Eagerly fetches and caches TCX/GPX during the transaction before commit
 - `src/services/polarSync.js` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.js`
 - `src/services/polarAuth.js` — OAuth token exchange with Basic auth, user registration
 - `src/services/tokenStore.js` — Reads/writes `src/data/token.json` (gitignored)
 - `src/services/xmlCache.js` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
-- `src/services/exerciseCache.js` — Server-side exercise JSON cache (`src/data/exercises.json`)
+- `src/services/exerciseCache.js` — Server-side exercise JSON cache (`src/data/exercises.json`). Deleting an exercise removes it here and records its id in `src/data/deletedExercises.json`, which `syncFromPolar()` skips so the Training Data API cannot bring it back; its TCX/GPX and sensor entry stay on disk
 - `src/services/hrSensor.js` — Infers chest strap vs. wrist heart rate sensor from TCX signal texture, cached in `src/data/hrSensor.json`
 
 **Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler.
@@ -93,7 +93,7 @@ The Polar API has two separate data access paths that behave very differently:
 - IndexedDB key paths cannot contain hyphens. Polar API returns fields like `start-time` and `detailed-sport-info` — access these with bracket notation, never use them as IndexedDB indexes
 - Polar's exercise transaction returns 204 when there's no new data. A committed transaction's data won't appear again — always rely on locally cached exercises
 - **Never use `/v3/exercises/{id}/tcx` during a transaction** — that's the Training Data API endpoint. During a transaction, use `{exerciseUrl}/tcx` where `exerciseUrl` is the full transaction URL like `https://www.polaraccesslink.com/v3/users/{userId}/exercise-transactions/{transactionId}/exercises/{exerciseId}`
-- The `src/data/` directory is gitignored (contains `token.json`, `exercises.json`, `hrSensor.json`, `tcx/`, `gpx/`)
+- The `src/data/` directory is gitignored (contains `token.json`, `exercises.json`, `deletedExercises.json`, `hrSensor.json`, `tcx/`, `gpx/`)
 - Polar's `device` / `device-id` name the **recording** device, not the heart rate source. A Pacer run with a paired H10 and one on wrist optical are labelled identically, and `SensorState` in the TCX is `Present` in all but 8 of 111k samples — it carries no information
 - Leaflet is loaded dynamically from CDN only when GPS data exists in the exercise
 - Frontend caches parsed detail data (`detailData`) as a property on exercise objects in IndexedDB. An `{ unavailable: true, checkedAt }` marker with a TTL prevents repeated fetches for exercises without detail data

@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { tokenCheck } from '../middleware/tokenCheck.js';
 import { polarFetch, polarFetchRaw } from '../services/polarApi.js';
 import { syncFromPolar } from '../services/polarSync.js';
-import { readCache, appendToCache } from '../services/exerciseCache.js';
+import { readCache, appendToCache, removeFromCache } from '../services/exerciseCache.js';
 import { readXmlCache, writeXmlCache } from '../services/xmlCache.js';
 import { withHrSensor } from '../services/hrSensor.js';
 
@@ -45,6 +45,18 @@ router.get('/exercises/:id', async (req, res) => {
   } catch (err) {
     console.error('Exercise detail error:', err.message);
     res.status(502).json({ error: 'Failed to fetch exercise detail' });
+  }
+});
+
+router.delete('/exercises/:id', async (req, res) => {
+  try {
+    const removed = await removeFromCache(req.params.id);
+    if (!removed) return res.status(404).json({ error: 'Activiteit niet gevonden' });
+    console.log(`[Cache] Deleted exercise ${req.params.id}`);
+    res.status(204).end();
+  } catch (err) {
+    console.error('Exercise delete error:', err.message);
+    res.status(500).json({ error: 'Verwijderen mislukt' });
   }
 });
 

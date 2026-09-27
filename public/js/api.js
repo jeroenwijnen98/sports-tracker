@@ -33,6 +33,24 @@ export function getCachedExercises() {
   return request('/api/exercises/cached');
 }
 
+/**
+ * Delete an exercise from the server-side cache. A 404 means the server never
+ * had it (a local-only exercise), which counts as deleted.
+ */
+export async function deleteExercise(id) {
+  const res = await fetch(`/api/exercises/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+  if (res.status === 401) {
+    window.location.reload();
+    throw new Error('Not authenticated');
+  }
+
+  if (!res.ok && res.status !== 404) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Delete failed: ${res.status}`);
+  }
+}
+
 export async function getExerciseTcx(id) {
   try {
     const res = await fetch(`/api/exercises/${id}/tcx`);

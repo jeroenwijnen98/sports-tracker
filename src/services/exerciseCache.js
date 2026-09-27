@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CACHE_PATH = join(__dirname, '..', 'data', 'exercises.json');
+const DELETED_PATH = join(__dirname, '..', 'data', 'deletedExercises.json');
 
 export async function readCache() {
   try {
@@ -31,4 +32,31 @@ export async function appendToCache(newExercises) {
     await writeCache([...existing, ...unique]);
   }
   return unique.length;
+}
+
+/**
+ * Remove an exercise from the cache and remember its id as deleted, so a sync
+ * does not bring it back from the Training Data API. Its TCX/GPX and heart
+ * rate sensor entry are kept: they cannot be fetched again.
+ * Returns false when the id was not cached.
+ */
+export async function removeFromCache(id) {
+  const existing = await readCache();
+  const remaining = existing.filter((e) => String(e.id) !== String(id));
+  if (remaining.length === existing.length) return false;
+
+  await writeCache(remaining);
+  const deleted = await readDeletedIds();
+  deleted.add(String(id));
+  await writeFile(DELETED_PATH, JSON.stringify([...deleted], null, 2));
+  return true;
+}
+
+/** Ids of exercises deleted by the user, as strings. */
+export async function readDeletedIds() {
+  try {
+    return new Set(JSON.parse(await readFile(DELETED_PATH, 'utf-8')));
+  } catch {
+    return new Set();
+  }
 }
