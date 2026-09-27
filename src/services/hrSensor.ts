@@ -36,7 +36,7 @@ interface HrSeries {
  * Polar Beat exercises, which are necessarily chest strap recordings because
  * the phone app has no sensor of its own. Beyond those, only two runs have a
  * sensor confirmed first-hand — they live in hrSensorTruth.json, and
- * `node scripts/classify-sensors.js` scores against them:
+ * `node scripts/classify-sensors.ts` scores against them:
  *
  *   2026-09-03  wrist        smoothness 1.45  called wrist
  *   2026-09-11  H10 strap    smoothness 0.80  called unknown
