@@ -2,7 +2,7 @@
 
 import { getAuthStatus, logout, importExerciseTcx, importExerciseJson } from './api.js';
 import { syncExercises, assignDefaultShoe } from './sync.js';
-import { backgroundFetchDetails } from './services/detailData.js';
+import { load as loadDetail } from './services/detailData.js';
 import { getAll, putMany, put } from './db.js';
 import { renderActivities } from './views/activities.js';
 import { renderActivity } from './views/activity.js';
@@ -59,6 +59,22 @@ async function init() {
   }
 }
 
+/**
+ * Load the detail data of each exercise one after another, so opening one
+ * later needs no fetch. Errors are ignored; the detail view loads it again.
+ *
+ * @param {string[]} ids
+ */
+async function prefetchDetails(ids) {
+  for (const id of ids) {
+    try {
+      await loadDetail(id);
+    } catch {
+      // ignore
+    }
+  }
+}
+
 // Sync
 async function doSync() {
   if (syncBtn.classList.contains('syncing')) return;
@@ -71,8 +87,8 @@ async function doSync() {
       const parts = [`${counts.newExercises} nieuwe activiteit(en) gesynchroniseerd`];
       if (counts.overlaps > 0) parts.push(`${counts.overlaps} overlap gemarkeerd`);
       showToast(parts.join(', '), 'success');
-      // Fire-and-forget: eagerly cache TCX detail data for new exercises
-      backgroundFetchDetails(newIds);
+      // Fire-and-forget: eagerly cache detail data for new exercises
+      prefetchDetails(newIds);
     } else {
       showToast('Alles is up-to-date', 'info');
     }
@@ -168,7 +184,7 @@ importFileInput.addEventListener('change', async () => {
       await putMany('exercises', imported);
 
       // Cache detail data in background
-      backgroundFetchDetails(imported.map((ex) => ex.id));
+      prefetchDetails(imported.map((ex) => ex.id));
     }
 
     // Show result toast

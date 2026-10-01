@@ -84,8 +84,8 @@ npm test                # node --test 'test/**/*.test.js'
 ```
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
-The tests cover pure logic only (import converters, overlap, intake, shoe totals, heart rate sensor
-classifier, formatters, running sports, HTML escaping), the transaction consumer against a fake `request`, plus the exercise cache against a temp directory — no
+The tests cover pure logic only (import converters, overlap, intake, shoe totals, detail data loading,
+heart rate sensor classifier, formatters, running sports, HTML escaping), the transaction consumer against a fake `request`, plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
 
@@ -119,7 +119,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 **Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler. The `.js` is served as it is and type-checked through JSDoc against `types/domain.ts`.
 
 - `public/js/app.js` — Entry point: auth check, tab switching, sync trigger
-- `public/js/db.js` — IndexedDB wrapper (3 stores: `exercises`, `shoes`, `settings`)
+- `public/js/db.js` — IndexedDB wrapper (4 stores: `exercises`, `shoes`, `settings`, `details`). Version 2 created `details` and moved each exercise's old `detailData` field into it (`splitDetailData`)
 - `public/js/intake.js` — The one way exercises enter IndexedDB. Pure core `ingest(incoming, { existing, shoes }) → { toSave, updatedExisting, counts }`: running sport filter, new vs. stored by id, overlap (via `markOverlaps`), default shoe for new exercises only, and the heart rate sensor backfill onto stored exercises. `ingestAndSave(incoming)` reads the stores, calls `ingest`, writes the result in one transaction and returns `{ counts, newIds }`. No DOM in the core, so Node tests import it
 - `public/js/shoes.js` — Shoes module, no DOM. Pure `shoeTotals(shoes, exercises) → Map<shoeId, km>`, called by the shoes view once per render
 - `public/js/sync.js` — `syncExercises()` fetches `/api/exercises` (the whole server exercise cache) and hands it to `ingestAndSave`. Still exports `assignDefaultShoe(exercises)` for the import handler in `app.js`
@@ -130,7 +130,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `public/js/utils/sports.js` — `RUNNING_SPORTS`, their labels, `isRunningSport(exercise)` and the `isRunningSportName(sport)` type guard: the one running sport list, also imported by `src/services/importConverters.ts`
 - `public/js/utils/html.js` — `escapeHtml()`, the one escaper for user- or file-controlled strings (shoe name/brand, device) put into markup
 - `public/js/utils/overlap.js` — `markOverlaps(imported, existing)`: marks the phone recording (Polar Beat, or no device) as overlap when a watch recording started within 5 minutes and overlaps in time, both within an import batch and against stored exercises. Pure; the import handler in `app.js` saves the result
-- `public/js/services/detailData.js` — Fetches TCX/GPX from backend, parses them, and caches parsed detail data on exercise objects in IndexedDB
+- `public/js/services/detailData.js` — One function, `load(exerciseId, { force })`: reads the `details` store, else fetches TCX (GPX only when there is no TCX), parses and stores it. Concurrent loads of one id share a fetch; `force` (the retry button) ignores the unavailable marker. Never touches the `exercises` store. `createDetailLoader()` takes the store and fetchers, so Node tests inject both
 - `public/js/utils/tcxParser.js` — Parses TCX XML into laps, trackpoints (HR, speed, distance), route coordinates
 - `public/js/utils/gpxParser.js` — Parses GPX XML into route coordinates
 - `public/js/views/runDetail.js` — Full-screen detail overlay with HR/pace chart, laps table, and Leaflet map
@@ -177,7 +177,7 @@ Checked against the AccessLink v3 reference (polar.com/accesslink-api, "Exercise
 - The `src/data/` directory is gitignored (contains `token.json`, `exercises.json`, `deletedExercises.json`, `hrSensor.json`, `tcx/`, `gpx/`)
 - Polar's `device` / `device-id` name the **recording** device, not the heart rate source. A Pacer run with a paired H10 and one on wrist optical are labelled identically, and `SensorState` in the TCX is `Present` in all but 8 of 111k samples — it carries no information
 - Leaflet is loaded dynamically from CDN only when GPS data exists in the exercise
-- Frontend caches parsed detail data (`detailData`) as a property on exercise objects in IndexedDB. An `{ unavailable: true, checkedAt }` marker with a TTL prevents repeated fetches for exercises without detail data
+- Frontend caches parsed detail data in its own `details` IndexedDB store, keyed by exercise id, never on the exercise record. An `{ id, unavailable: true, checkedAt }` entry with a TTL prevents repeated fetches for exercises without detail data
 
 ## Agent skills
 

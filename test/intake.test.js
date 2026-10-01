@@ -75,7 +75,6 @@ test('the default shoe goes to new exercises only, without mutating the input', 
     ...run('old', 'Polar Pacer', '06:00'),
     shoeId: 1,
     overlap: true,
-    detailData: { unavailable: true, checkedAt: 1 },
   };
   const incomingStored = run('old', 'Polar Pacer', '06:00');
   const fresh = run('new', 'Polar Pacer', '08:00');
@@ -104,7 +103,6 @@ test('a changed heart rate sensor is backfilled onto the stored exercise, nothin
     ...run('old', 'Polar Pacer', '06:00'),
     shoeId: 1,
     overlap: true,
-    detailData: { unavailable: true, checkedAt: 1 },
     hrSensor: { label: 'unknown', smoothness: 0.5 },
   };
   /** @type {Exercise} */

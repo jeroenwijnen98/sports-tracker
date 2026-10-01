@@ -59,8 +59,6 @@ export interface Exercise {
   shoeId?: number;
   /** A second recording of a run another device also recorded; not counted in totals. */
   overlap?: boolean;
-  /** Parsed detail data, or the marker left when none could be fetched. */
-  detailData?: DetailData | DetailDataUnavailable;
 }
 
 /** One segment of an exercise as the watch split it. */
@@ -102,19 +100,6 @@ export interface DetailData {
   hasGps: boolean;
   hasHeartRate: boolean;
   hasSpeed: boolean;
-}
-
-/**
- * Left on an exercise when neither TCX nor GPX could be fetched, so the fetch
- * is only retried after a wait. Markers written before the rename carry
- * `timestamp` instead of `checkedAt`.
- */
-export interface DetailDataUnavailable {
-  unavailable: true;
-  /** Epoch milliseconds. */
-  checkedAt?: number;
-  /** @deprecated Older markers only; read as `checkedAt`. */
-  timestamp?: number;
 }
 
 // ─── Heart rate ──────────────────────────────────────────────────────────────
