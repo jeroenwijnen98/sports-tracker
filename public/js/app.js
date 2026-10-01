@@ -1,7 +1,7 @@
 // @ts-check
 
 import { getAuthStatus, logout, importExerciseTcx, importExerciseJson } from './api.js';
-import { syncExercises, recalcAllShoeKm, assignDefaultShoe } from './sync.js';
+import { syncExercises, assignDefaultShoe } from './sync.js';
 import { backgroundFetchDetails } from './services/detailData.js';
 import { getAll, putMany, put } from './db.js';
 import { renderActivities } from './views/activities.js';
@@ -66,7 +66,6 @@ async function doSync() {
   syncBtn.classList.add('syncing');
   try {
     const { counts, newIds } = await syncExercises();
-    await recalcAllShoeKm();
 
     if (counts.newExercises > 0) {
       const parts = [`${counts.newExercises} nieuwe activiteit(en) gesynchroniseerd`];
@@ -167,7 +166,6 @@ importFileInput.addEventListener('change', async () => {
       await assignDefaultShoe(imported);
 
       await putMany('exercises', imported);
-      await recalcAllShoeKm();
 
       // Cache detail data in background
       backgroundFetchDetails(imported.map((ex) => ex.id));

@@ -17,8 +17,8 @@ const run = (id, device, start, sport = 'RUNNING') => ({
 
 /** @type {Shoe[]} */
 const shoes = [
-  { id: 1, name: 'Oud', initialKm: 0, totalKm: 0, isDefault: false },
-  { id: 2, name: 'Nieuw', initialKm: 0, totalKm: 0, isDefault: true },
+  { id: 1, name: 'Oud', initialKm: 0, isDefault: false },
+  { id: 2, name: 'Nieuw', initialKm: 0, isDefault: true },
 ];
 
 /** @type {(ex: Exercise[]) => string} */

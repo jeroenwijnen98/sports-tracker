@@ -2,7 +2,6 @@
 
 import { get, del } from '../db.js';
 import { getDetailData, retryDetailData } from '../services/detailData.js';
-import { recalcShoeKm } from '../sync.js';
 import { deleteExercise } from '../api.js';
 import { renderActivities } from './activities.js';
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
@@ -824,9 +823,7 @@ function confirmDelete(exercise) {
       showToast('Verwijderen mislukt, probeer het later opnieuw', 'error');
       return;
     }
-    const shoeId = exercise.shoeId;
     await del('exercises', exercise.id);
-    if (shoeId) await recalcShoeKm(shoeId);
     closeRunDetail();
     await renderActivities();
     showToast('Activiteit verwijderd', 'success');
