@@ -17,6 +17,32 @@ import { sameExercise } from './utils/identity.js';
  */
 
 /**
+ * Drop each new exercise that is the same exercise as a stored one or as one
+ * kept before it. Polar-synced exercises go first (`sort` is stable), so they
+ * win over an imported copy whatever the batch order; the kept ones come back
+ * in their original order.
+ *
+ * @param {Exercise[]} fresh
+ * @param {Exercise[]} existing
+ * @returns {{ unique: Exercise[], duplicates: number }}
+ */
+function dropSameExercises(fresh, existing) {
+  const syncedFirst = [...fresh].sort((a, b) => Number(!!a.source) - Number(!!b.source));
+
+  /** @type {Exercise[]} */
+  const kept = [];
+  for (const ex of syncedFirst) {
+    const isCopy = existing.some((stored) => sameExercise(ex, stored)) || kept.some((k) => sameExercise(ex, k));
+    if (!isCopy) kept.push(ex);
+  }
+
+  return {
+    unique: fresh.filter((ex) => kept.includes(ex)),
+    duplicates: fresh.length - kept.length,
+  };
+}
+
+/**
  * The intake rules for every exercise entering the browser store. Pure: reads
  * its arguments, mutates none of them.
  *
@@ -46,19 +72,7 @@ export function ingest(incoming, { existing, shoes }) {
     fresh.set(ex.id, ex);
   }
 
-  /** @type {Exercise[]} */
-  const kept = [];
-  let duplicates = 0;
-  const syncedFirst = [...fresh.values()].sort((a, b) => Number(!!a.source) - Number(!!b.source));
-  for (const ex of syncedFirst) {
-    if (existing.some((stored) => sameExercise(ex, stored)) || kept.some((k) => sameExercise(ex, k))) {
-      duplicates++;
-    } else {
-      kept.push(ex);
-    }
-  }
-  const unique = [...fresh.values()].filter((ex) => kept.includes(ex));
-
+  const { unique, duplicates } = dropSameExercises([...fresh.values()], existing);
   const marked = markOverlaps(unique, existing);
 
   const defaultShoeId = shoes.find((s) => s.isDefault)?.id;
