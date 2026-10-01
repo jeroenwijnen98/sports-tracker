@@ -3,14 +3,17 @@
 import { getAll, putMany } from './db.js';
 import { isRunningSport } from './utils/sports.js';
 import { markOverlaps } from './utils/overlap.js';
+import { sameExercise } from './utils/identity.js';
 
 /** @typedef {import('../../types/domain.ts').Exercise} Exercise */
 /** @typedef {import('../../types/domain.ts').Shoe} Shoe */
 
 /**
  * What one intake did: how many exercises are new, how many were marked
- * overlap (new or already stored), and how many the store holds afterwards.
- * @typedef {{ newExercises: number, overlaps: number, total: number }} IntakeCounts
+ * overlap (new or already stored), how many were dropped as the same exercise
+ * as one stored or one earlier in the batch under another id, and how many the
+ * store holds afterwards.
+ * @typedef {{ newExercises: number, overlaps: number, duplicates: number, total: number }} IntakeCounts
  */
 
 /**
@@ -18,6 +21,11 @@ import { markOverlaps } from './utils/overlap.js';
  * its arguments, mutates none of them.
  *
  * - only running sports get in, and an id already stored is not new;
+ * - an exercise that is the same exercise as a stored one, or as another one
+ *   in the batch, under another id (see `sameExercise`) is not saved again but
+ *   counted as a duplicate; the stored one stays as it is. Within a batch the
+ *   copy synced from Polar wins over an imported one, so the order the two
+ *   arrive in does not matter;
  * - overlap is marked within the new exercises and against the stored ones;
  * - new exercises without a shoe get the default shoe, stored ones keep theirs;
  * - a changed heart rate sensor is copied onto the stored exercise, touching
@@ -38,7 +46,20 @@ export function ingest(incoming, { existing, shoes }) {
     fresh.set(ex.id, ex);
   }
 
-  const marked = markOverlaps([...fresh.values()], existing);
+  /** @type {Exercise[]} */
+  const kept = [];
+  let duplicates = 0;
+  const syncedFirst = [...fresh.values()].sort((a, b) => Number(!!a.source) - Number(!!b.source));
+  for (const ex of syncedFirst) {
+    if (existing.some((stored) => sameExercise(ex, stored)) || kept.some((k) => sameExercise(ex, k))) {
+      duplicates++;
+    } else {
+      kept.push(ex);
+    }
+  }
+  const unique = [...fresh.values()].filter((ex) => kept.includes(ex));
+
+  const marked = markOverlaps(unique, existing);
 
   const defaultShoeId = shoes.find((s) => s.isDefault)?.id;
   const toSave = marked.imported.map((ex) => {
@@ -61,6 +82,7 @@ export function ingest(incoming, { existing, shoes }) {
     counts: {
       newExercises: toSave.length,
       overlaps: marked.count,
+      duplicates,
       total: existing.length + toSave.length,
     },
   };

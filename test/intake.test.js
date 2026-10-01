@@ -33,7 +33,7 @@ test('a Pacer and a Beat run in the same batch: the Beat run is saved as overlap
   assert.equal(toSave.find((e) => e.id === 'beat')?.overlap, true);
   assert.equal(toSave.find((e) => e.id === 'pacer')?.overlap, undefined);
   assert.deepEqual(updatedExisting, []);
-  assert.deepEqual(counts, { newExercises: 2, overlaps: 1, total: 2 });
+  assert.deepEqual(counts, { newExercises: 2, overlaps: 1, duplicates: 0, total: 2 });
 });
 
 test('a watch run arriving by sync marks the stored Beat recording as overlap', () => {
@@ -46,7 +46,7 @@ test('a watch run arriving by sync marks the stored Beat recording as overlap', 
   assert.deepEqual(toSave.map((e) => e.id), ['pacer']);
   assert.deepEqual(updatedExisting, [{ ...stored, overlap: true }]);
   assert.equal(stored.overlap, undefined, 'the stored exercise is not mutated');
-  assert.deepEqual(counts, { newExercises: 1, overlaps: 1, total: 2 });
+  assert.deepEqual(counts, { newExercises: 1, overlaps: 1, duplicates: 0, total: 2 });
 });
 
 test('only running sports get in', () => {
@@ -66,7 +66,7 @@ test('re-ingesting the same batch saves nothing and changes no counts', () => {
   const again = ingest(batch, { existing, shoes });
   assert.deepEqual(again.toSave, []);
   assert.deepEqual(again.updatedExisting, []);
-  assert.deepEqual(again.counts, { newExercises: 0, overlaps: 0, total: 2 });
+  assert.deepEqual(again.counts, { newExercises: 0, overlaps: 0, duplicates: 0, total: 2 });
 });
 
 test('the default shoe goes to new exercises only, without mutating the input', () => {
@@ -116,7 +116,7 @@ test('a changed heart rate sensor is backfilled onto the stored exercise, nothin
 
   assert.deepEqual(toSave, []);
   assert.deepEqual(updatedExisting, [{ ...stored, hrSensor: incoming.hrSensor }]);
-  assert.deepEqual(counts, { newExercises: 0, overlaps: 0, total: 1 });
+  assert.deepEqual(counts, { newExercises: 0, overlaps: 0, duplicates: 0, total: 1 });
 
   const unchanged = ingest([incoming], { existing: updatedExisting, shoes });
   assert.deepEqual(unchanged.updatedExisting, []);

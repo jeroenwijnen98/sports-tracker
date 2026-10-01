@@ -14,6 +14,19 @@ else hangs off: it carries the distance, duration, heart rate and the shoe it
 was run in.
 _Avoid_: activity, workout, session, run (as the name of the record)
 
+**Exercise identity**:
+Two exercises are the same exercise when their start times and durations
+match to within a few seconds, whatever their ids: the same run arriving from
+two sources, such as a Polar sync and an imported export or TCX of it. Start
+times are compared as instants (a TCX gives UTC, Polar gives local time plus
+its offset), or as local times when neither has an offset to make it an
+instant; when one is only an instant and the other only a local time, they are
+not the same. Two exercises that both came from Polar sync are the same only
+by id, and a phone recording is never the same as another device's recording
+of that run: that is an overlap. The copy already here stays as it is; the
+other is not stored and counts as a duplicate.
+_Avoid_: duplicate (as the name of the rule), match, same run
+
 **Running sport**:
 The set of sports that belong in this dashboard: road, trail, treadmill and
 ultra running. An exercise in any other sport is not stored at all.

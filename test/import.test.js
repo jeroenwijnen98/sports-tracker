@@ -26,15 +26,15 @@ test('parseDeviceMap yields an empty map for a malformed file', () => {
 });
 
 test('importToast keeps the wording for imported, duplicate and overlap', () => {
-  assert.deepEqual(importToast({ newExercises: 2, overlaps: 1, total: 5 }, 1), {
+  assert.deepEqual(importToast({ newExercises: 2, overlaps: 1, duplicates: 0, total: 5 }, 1), {
     message: '2 geïmporteerd, 1 duplicaat, 1 overlap gemarkeerd',
     type: 'success',
   });
-  assert.deepEqual(importToast({ newExercises: 0, overlaps: 0, total: 5 }, 3), {
+  assert.deepEqual(importToast({ newExercises: 0, overlaps: 0, duplicates: 0, total: 5 }, 3), {
     message: '3 duplicaat',
     type: 'info',
   });
-  assert.deepEqual(importToast({ newExercises: 0, overlaps: 0, total: 5 }, 0), {
+  assert.deepEqual(importToast({ newExercises: 0, overlaps: 0, duplicates: 0, total: 5 }, 0), {
     message: 'Geen hardloopactiviteiten gevonden in de bestanden',
     type: 'info',
   });

@@ -43,7 +43,7 @@ export function parseDeviceMap(contents) {
 
 /**
  * The toast after an import, from what intake did plus the files the server
- * already had (a 409).
+ * already had (a 409). Both kinds of duplicate are shown as one number.
  *
  * @param {IntakeCounts} counts
  * @param {number} duplicates
@@ -51,8 +51,9 @@ export function parseDeviceMap(contents) {
  */
 export function importToast(counts, duplicates) {
   const parts = [];
+  const allDuplicates = duplicates + counts.duplicates;
   if (counts.newExercises > 0) parts.push(`${counts.newExercises} geïmporteerd`);
-  if (duplicates > 0) parts.push(`${duplicates} duplicaat`);
+  if (allDuplicates > 0) parts.push(`${allDuplicates} duplicaat`);
   if (counts.overlaps > 0) parts.push(`${counts.overlaps} overlap gemarkeerd`);
 
   if (counts.newExercises > 0) return { message: parts.join(', '), type: 'success' };
