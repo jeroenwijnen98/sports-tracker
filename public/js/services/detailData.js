@@ -1,6 +1,6 @@
 // @ts-check
 
-import { get, put } from '../db.js';
+import { get, put, del } from '../db.js';
 import { getExerciseTcx, getExerciseGpx } from '../api.js';
 import { parseTcx } from '../utils/tcxParser.js';
 import { parseGpx } from '../utils/gpxParser.js';
@@ -14,6 +14,7 @@ import { parseGpx } from '../utils/gpxParser.js';
  * @typedef {object} DetailsStore
  * @property {(id: string) => Promise<DetailsEntry | undefined>} get
  * @property {(entry: DetailsEntry) => Promise<unknown>} put
+ * @property {(id: string) => Promise<unknown>} delete
  */
 
 /**
@@ -28,7 +29,8 @@ import { parseGpx } from '../utils/gpxParser.js';
 export const RETRY_AFTER_MS = 60 * 60 * 1000; // 1 hour
 
 /**
- * Build `load` around a store and fetchers, so Node tests can inject both.
+ * Build `load` and `forget` around a store and fetchers, so Node tests can
+ * inject both.
  *
  * @param {DetailLoaderDeps} deps
  */
@@ -90,13 +92,26 @@ export function createDetailLoader({ store, fetchTcx, fetchGpx, now = Date.now }
     }
   }
 
-  return load;
+  /**
+   * Remove an exercise's details entry, once a load of it still in flight
+   * has written its own, so a deleted exercise leaves nothing behind.
+   *
+   * @param {string} id
+   * @returns {Promise<void>}
+   */
+  async function forget(id) {
+    await inFlight.get(id)?.catch(() => {});
+    await store.delete(id);
+  }
+
+  return { load, forget };
 }
 
-export const load = createDetailLoader({
+export const { load, forget } = createDetailLoader({
   store: {
     get: (id) => get('details', id),
     put: (entry) => put('details', entry),
+    delete: (id) => del('details', id),
   },
   fetchTcx: async (id) => {
     const xml = await getExerciseTcx(id);

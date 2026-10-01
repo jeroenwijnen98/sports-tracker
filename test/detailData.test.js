@@ -43,10 +43,11 @@ function setup({ tcx = parsed, gpx = null, entries = [] } = {}) {
   const releases = [];
   let hold = false;
 
-  const load = createDetailLoader({
+  const { load, forget } = createDetailLoader({
     store: {
       get: async (id) => db.details.get(id),
       put: async (entry) => { db.details.set(entry.id, entry); },
+      delete: async (id) => { db.details.delete(id); },
     },
     fetchTcx: async () => {
       calls.tcx++;
@@ -60,7 +61,7 @@ function setup({ tcx = parsed, gpx = null, entries = [] } = {}) {
     now: () => clock.now,
   });
 
-  return { load, db, calls, clock, holdFetches: () => { hold = true; }, release: () => releases.forEach((r) => r()) };
+  return { load, forget, db, calls, clock, holdFetches: () => { hold = true; }, release: () => releases.forEach((r) => r()) };
 }
 
 test('stored detail data is returned without a fetch', async () => {
@@ -136,6 +137,26 @@ test('a load finishing after its exercise was deleted does not bring the exercis
   await pending;
 
   assert.equal(db.exercises.has('a'), false);
+});
+
+test('forget removes the details entry of an exercise', async () => {
+  const { forget, db } = setup({ entries: [{ id: 'a', detail: parsed }, { id: 'b', detail: parsed }] });
+  await forget('a');
+  assert.equal(db.details.has('a'), false);
+  assert.equal(db.details.has('b'), true);
+});
+
+test('forget waits for a load still in flight, so it leaves no entry behind', async () => {
+  const { load, forget, db, holdFetches, release } = setup();
+  holdFetches();
+  const pending = load('a');
+  await new Promise((resolve) => setImmediate(resolve));
+
+  const forgotten = forget('a');
+  release();
+  await Promise.all([pending, forgotten]);
+
+  assert.equal(db.details.has('a'), false);
 });
 
 test('the migration moves detail data off a version 1 exercise', () => {
