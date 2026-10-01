@@ -1,7 +1,7 @@
 // @ts-check
 
 import { get, del } from '../db.js';
-import { getDetailData, retryDetailData } from '../services/detailData.js';
+import { load } from '../services/detailData.js';
 import { recalcShoeKm } from '../sync.js';
 import { deleteExercise } from '../api.js';
 import { renderActivities } from './activities.js';
@@ -115,7 +115,7 @@ export async function openRunDetail(exerciseId) {
   });
 
   // Load detail data
-  const detail = await getDetailData(exerciseId);
+  const detail = await load(exerciseId);
   const loadingEl = document.getElementById('run-detail-loading');
   if (loadingEl) loadingEl.style.display = 'none';
 
@@ -146,7 +146,7 @@ function showRetryButton(exerciseId) {
     retryBtn.textContent = 'Laden...';
     retryBtn.disabled = true;
 
-    const detail = await retryDetailData(exerciseId);
+    const detail = await load(exerciseId, { force: true });
     if (detail) {
       chartSection.innerHTML = chartMarkup();
       renderChart(detail);

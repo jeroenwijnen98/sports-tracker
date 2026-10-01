@@ -5,96 +5,105 @@ import { getExerciseTcx, getExerciseGpx } from '../api.js';
 import { parseTcx } from '../utils/tcxParser.js';
 import { parseGpx } from '../utils/gpxParser.js';
 
-/** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
 /** @typedef {import('../../../types/domain.ts').DetailData} DetailData */
-
-const RETRY_AFTER_MS = 60 * 60 * 1000; // 1 hour
+/** @typedef {import('../db.js').DetailsEntry} DetailsEntry */
 
 /**
- * Get detailed data (trackpoints, laps, route) for an exercise.
- * Checks IndexedDB cache first, then fetches from Polar API.
- * Returns the detail data object, or null if unavailable.
- *
- * @param {string} exerciseId
- * @returns {Promise<DetailData | null>}
+ * Where detail data is kept, keyed by exercise id. Never the exercises store:
+ * a load that finishes after its exercise was deleted must not bring it back.
+ * @typedef {object} DetailsStore
+ * @property {(id: string) => Promise<DetailsEntry | undefined>} get
+ * @property {(entry: DetailsEntry) => Promise<unknown>} put
  */
-export async function getDetailData(exerciseId) {
-  const exercise = await get('exercises', exerciseId);
-  if (!exercise) return null;
 
-  // Return cached data (retry unavailable entries after TTL)
-  if (exercise.detailData) {
-    if (!('unavailable' in exercise.detailData)) return exercise.detailData;
-    // Markers written before the rename carry `timestamp` instead of `checkedAt`
-    const { checkedAt, timestamp } = exercise.detailData;
-    const age = Date.now() - (checkedAt ?? timestamp ?? 0);
-    if (age < RETRY_AFTER_MS) return null;
+/**
+ * @typedef {object} DetailLoaderDeps
+ * @property {DetailsStore} store
+ * @property {(id: string) => Promise<DetailData | null>} fetchTcx Fetched and parsed, or null when there is none.
+ * @property {(id: string) => Promise<Pick<DetailData, 'route' | 'hasGps'> | null>} fetchGpx Fetched and parsed, or null when there is none.
+ * @property {() => number} [now]
+ */
+
+/** How long an unavailable marker holds before the next load tries again. */
+export const RETRY_AFTER_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Build `load` around a store and fetchers, so Node tests can inject both.
+ *
+ * @param {DetailLoaderDeps} deps
+ */
+export function createDetailLoader({ store, fetchTcx, fetchGpx, now = Date.now }) {
+  /** @type {Map<string, Promise<DetailData | null>>} */
+  const inFlight = new Map();
+
+  /**
+   * @param {string} id
+   * @returns {Promise<DetailData | null>}
+   */
+  async function fetchAndStore(id) {
+    const tcx = await fetchTcx(id);
+    if (tcx) {
+      await store.put({ id, detail: tcx });
+      return tcx;
+    }
+
+    // Fallback: GPX has the route only
+    const gpx = await fetchGpx(id);
+    if (gpx) {
+      /** @type {DetailData} */
+      const detail = { ...gpx, laps: [], allTrackpoints: [], hasHeartRate: false, hasSpeed: false };
+      await store.put({ id, detail });
+      return detail;
+    }
+
+    // Neither: mark it unavailable so it is only retried after the TTL
+    await store.put({ id, unavailable: true, checkedAt: now() });
+    return null;
   }
 
-  return fetchAndCacheDetail(exercise);
-}
+  /**
+   * Detail data for one exercise: from the store, or fetched and stored.
+   * Null when there is none, without a fetch while an unavailable marker is
+   * younger than the TTL; `force` (the retry button) ignores the marker.
+   * Concurrent loads of the same id share one fetch.
+   *
+   * @param {string} id
+   * @param {{ force?: boolean }} [options]
+   * @returns {Promise<DetailData | null>}
+   */
+  async function load(id, { force = false } = {}) {
+    const pending = inFlight.get(id);
+    if (pending) return pending;
 
-/**
- * Force-retry fetching detail data, ignoring any cached unavailable state.
- *
- * @param {string} exerciseId
- * @returns {Promise<DetailData | null>}
- */
-export async function retryDetailData(exerciseId) {
-  const exercise = await get('exercises', exerciseId);
-  if (!exercise) return null;
-  delete exercise.detailData;
-  return fetchAndCacheDetail(exercise);
-}
+    const promise = (async () => {
+      const entry = await store.get(id);
+      if (entry && 'detail' in entry) return entry.detail;
+      if (entry && !force && now() - entry.checkedAt < RETRY_AFTER_MS) return null;
+      return fetchAndStore(id);
+    })();
 
-/**
- * @param {Exercise} exercise
- * @returns {Promise<DetailData | null>}
- */
-async function fetchAndCacheDetail(exercise) {
-  // Try TCX
-  const tcxXml = await getExerciseTcx(exercise.id);
-  if (tcxXml) {
-    const data = parseTcx(tcxXml);
-    exercise.detailData = data;
-    await put('exercises', exercise);
-    return data;
-  }
-
-  // Fallback: try GPX for map-only data
-  const gpxXml = await getExerciseGpx(exercise.id);
-  if (gpxXml) {
-    /** @type {DetailData} */
-    const data = {
-      ...parseGpx(gpxXml),
-      laps: [],
-      allTrackpoints: [],
-      hasHeartRate: false,
-      hasSpeed: false,
-    };
-    exercise.detailData = data;
-    await put('exercises', exercise);
-    return data;
-  }
-
-  // Both failed — mark as unavailable so it is only retried after the TTL
-  exercise.detailData = { unavailable: true, checkedAt: Date.now() };
-  await put('exercises', exercise);
-  return null;
-}
-
-/**
- * Eagerly fetch and cache detail data for a list of exercise IDs.
- * Fire-and-forget; errors are silently ignored.
- *
- * @param {string[]} ids
- */
-export async function backgroundFetchDetails(ids) {
-  for (const id of ids) {
+    inFlight.set(id, promise);
     try {
-      await getDetailData(id);
-    } catch {
-      // ignore
+      return await promise;
+    } finally {
+      inFlight.delete(id);
     }
   }
+
+  return load;
 }
+
+export const load = createDetailLoader({
+  store: {
+    get: (id) => get('details', id),
+    put: (entry) => put('details', entry),
+  },
+  fetchTcx: async (id) => {
+    const xml = await getExerciseTcx(id);
+    return xml ? parseTcx(xml) : null;
+  },
+  fetchGpx: async (id) => {
+    const xml = await getExerciseGpx(id);
+    return xml ? parseGpx(xml) : null;
+  },
+});

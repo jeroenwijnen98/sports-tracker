@@ -2,17 +2,25 @@
 
 /** @typedef {import('../../types/domain.ts').Exercise} Exercise */
 /** @typedef {import('../../types/domain.ts').Shoe} Shoe */
+/** @typedef {import('../../types/domain.ts').DetailData} DetailData */
 
 /** @typedef {{ key: string, value: unknown }} Setting */
 
 /**
+ * The detail data of one exercise, keyed by its id, or the marker left when
+ * neither TCX nor GPX could be fetched. Only `services/detailData.js` uses it.
+ * @typedef {{ id: string, detail: DetailData }
+ *   | { id: string, unavailable: true, checkedAt: number }} DetailsEntry
+ */
+
+/**
  * What each object store holds, so `getAll('shoes')` resolves to `Shoe[]`.
- * @typedef {{ exercises: Exercise, shoes: Shoe, settings: Setting }} Stores
+ * @typedef {{ exercises: Exercise, shoes: Shoe, settings: Setting, details: DetailsEntry }} Stores
  * @typedef {keyof Stores} StoreName
  */
 
 const DB_NAME = 'sports-tracker';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 /** @type {Promise<IDBDatabase> | undefined} */
 let dbPromise;
@@ -24,8 +32,9 @@ function open() {
   dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
 
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (event) => {
       const db = req.result;
+      const upgrade = /** @type {IDBTransaction} */ (req.transaction);
 
       if (!db.objectStoreNames.contains('exercises')) {
         db.createObjectStore('exercises', { keyPath: 'id' });
@@ -39,6 +48,11 @@ function open() {
       if (!db.objectStoreNames.contains('settings')) {
         db.createObjectStore('settings', { keyPath: 'key' });
       }
+
+      if (!db.objectStoreNames.contains('details')) {
+        db.createObjectStore('details', { keyPath: 'id' });
+        if (event.oldVersion >= 1) moveDetailData(upgrade);
+      }
     };
 
     req.onsuccess = () => resolve(req.result);
@@ -46,6 +60,45 @@ function open() {
   });
 
   return dbPromise;
+}
+
+/**
+ * Version 1 kept detail data as a `detailData` field on each exercise. Split a
+ * version 1 exercise record into the exercise without it and its details
+ * entry, if it had one. Old unavailable markers carry `timestamp` instead of
+ * `checkedAt`.
+ *
+ * @param {Exercise & { detailData?: any }} record
+ * @returns {{ exercise: Exercise, entry: DetailsEntry | null }}
+ */
+export function splitDetailData(record) {
+  const { detailData, ...exercise } = record;
+  if (!detailData) return { exercise, entry: null };
+  /** @type {DetailsEntry} */
+  const entry = detailData.unavailable
+    ? { id: exercise.id, unavailable: true, checkedAt: detailData.checkedAt ?? detailData.timestamp ?? 0 }
+    : { id: exercise.id, detail: detailData };
+  return { exercise, entry };
+}
+
+/**
+ * Move every exercise's `detailData` into the details store.
+ *
+ * @param {IDBTransaction} upgrade The version change transaction.
+ */
+function moveDetailData(upgrade) {
+  const details = upgrade.objectStore('details');
+  const cursorReq = upgrade.objectStore('exercises').openCursor();
+  cursorReq.onsuccess = () => {
+    const cursor = cursorReq.result;
+    if (!cursor) return;
+    const { exercise, entry } = splitDetailData(cursor.value);
+    if (entry) {
+      details.put(entry);
+      cursor.update(exercise);
+    }
+    cursor.continue();
+  };
 }
 
 /**
