@@ -14,4 +14,3 @@ import { ingestAndSave } from './intake.js';
 export async function syncExercises() {
   return ingestAndSave(await getExercises());
 }
-
