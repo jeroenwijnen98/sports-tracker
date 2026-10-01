@@ -46,7 +46,8 @@ export async function syncFromPolar(
     const trainingExercises: Exercise[] = await (await request('/exercises')).json();
     fromTrainingApi = trainingExercises.length;
     const deletedIds = await readDeletedIds();
-    const addedFromTrainingApi = await appendToCache(trainingExercises.filter((e) => !deletedIds.has(String(e.id))));
+    const notDeleted = trainingExercises.filter((e) => !deletedIds.has(String(e.id)));
+    const addedFromTrainingApi = await appendToCache(notDeleted);
     if (addedFromTrainingApi > 0) {
       console.log(`[Polar] Added ${addedFromTrainingApi} exercises from Training Data API`);
     }
