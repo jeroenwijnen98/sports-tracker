@@ -1,26 +1,17 @@
 // @ts-check
 
 import { getAuthStatus, logout, importExerciseTcx, importExerciseJson } from './api.js';
-import { syncExercises, assignDefaultShoe } from './sync.js';
+import { syncExercises } from './sync.js';
+import { ingestAndSave } from './intake.js';
+import { parseDeviceMap, importToast } from './import.js';
 import { load as loadDetail } from './services/detailData.js';
-import { getAll, putMany, put } from './db.js';
 import { renderActivities } from './views/activities.js';
 import { renderActivity } from './views/activity.js';
 import { renderShoes } from './views/shoes.js';
 import { showToast } from './components/toast.js';
-import { markOverlaps } from './utils/overlap.js';
-import { isRunningSport } from './utils/sports.js';
 import { keepSessionAlive } from './session.js';
 
 /** @typedef {import('../../types/domain.ts').Exercise} Exercise */
-
-/**
- * The parts of a Polar data export's `products-devices` file used to name devices.
- * @typedef {object} ProductsDevices
- * @property {{ deviceId?: string, name?: string }[]} [devices]
- * @property {{ deviceId: string, archived?: string }[]} [archivedDevices]
- * @property {{ eventType?: string, modelName?: string, archived?: string }[]} [productRegistrationEvents]
- */
 
 const authScreen = /** @type {HTMLElement} */ (document.getElementById('auth-screen'));
 const appScreen = /** @type {HTMLElement} */ (document.getElementById('app-screen'));
@@ -115,31 +106,14 @@ importFileInput.addEventListener('change', async () => {
   importBtn.classList.add('syncing');
   try {
     /** @type {Exercise[]} */
-    let imported = [];
+    const imported = [];
     let duplicates = 0;
 
-    // Build device ID → name map from products-devices file if present
-    /** @type {Record<string, string>} */
-    const deviceMap = {};
+    /** @type {Map<string, string>} */
+    const deviceMap = new Map();
     for (const file of files) {
-      if (file.name.startsWith('products-devices')) {
-        try {
-          /** @type {ProductsDevices} */
-          const pd = JSON.parse(await file.text());
-          for (const d of pd.devices || []) {
-            if (d.deviceId && d.name) deviceMap[d.deviceId] = d.name;
-          }
-          // Map archived devices via registration events
-          const archived = new Set((pd.archivedDevices || []).map((d) => d.deviceId));
-          for (const evt of pd.productRegistrationEvents || []) {
-            if (evt.eventType === 'DELETE' && evt.modelName) {
-              // Match by timestamp to find deviceId
-              const dev = (pd.archivedDevices || []).find((d) => d.archived === evt.archived);
-              if (dev) deviceMap[dev.deviceId] = evt.modelName;
-            }
-          }
-        } catch { /* skip */ }
-      }
+      if (!file.name.startsWith('products-devices')) continue;
+      for (const [id, name] of parseDeviceMap(await file.text())) deviceMap.set(id, name);
     }
 
     for (const file of files) {
@@ -155,51 +129,22 @@ importFileInput.addEventListener('change', async () => {
         }
         if (exercise._duplicate) {
           duplicates++;
-        } else if (isRunningSport(exercise)) {
-          // Resolve device name
-          if (exercise.device && deviceMap[exercise.device]) {
-            exercise.device = deviceMap[exercise.device];
-          }
-          imported.push(exercise);
+          continue;
         }
+        const device = exercise.device && deviceMap.get(exercise.device);
+        if (device) exercise.device = device;
+        imported.push(exercise);
       } catch (err) {
         console.error(`Import failed for ${file.name}:`, /** @type {Error} */ (err).message, err);
       }
     }
 
-    // Mark overlap (e.g. Polar Beat + Polar Pacer recording the same run)
-    let overlapsMarked = 0;
-    if (imported.length > 0) {
-      const marked = markOverlaps(imported, await getAll('exercises'));
-      imported = marked.imported;
-      overlapsMarked = marked.count;
-      for (const ex of marked.updatedExisting) {
-        await put('exercises', ex);
-      }
-    }
+    const { counts, newIds } = await ingestAndSave(imported);
+    // Fire-and-forget: eagerly cache detail data for new exercises
+    prefetchDetails(newIds);
 
-    if (imported.length > 0) {
-      await assignDefaultShoe(imported);
-
-      await putMany('exercises', imported);
-
-      // Cache detail data in background
-      prefetchDetails(imported.map((ex) => ex.id));
-    }
-
-    // Show result toast
-    const parts = [];
-    if (imported.length > 0) parts.push(`${imported.length} geïmporteerd`);
-    if (duplicates > 0) parts.push(`${duplicates} duplicaat`);
-    if (overlapsMarked > 0) parts.push(`${overlapsMarked} overlap gemarkeerd`);
-
-    if (imported.length > 0) {
-      showToast(parts.join(', '), 'success');
-    } else if (parts.length > 0) {
-      showToast(parts.join(', '), 'info');
-    } else {
-      showToast('Geen hardloopactiviteiten gevonden in de bestanden', 'info');
-    }
+    const { message, type } = importToast(counts, duplicates);
+    showToast(message, type);
 
     await renderActiveTab();
   } catch (err) {
