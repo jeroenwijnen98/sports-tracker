@@ -1,93 +1,20 @@
 // @ts-check
 
-import { getExercises, getCachedExercises } from './api.js';
-import { getAll, put, putMany, get } from './db.js';
-import { isRunningSport } from './utils/sports.js';
+import { getExercises } from './api.js';
+import { getAll, put, get } from './db.js';
+import { ingestAndSave } from './intake.js';
 
 /** @typedef {import('../../types/domain.ts').Exercise} Exercise */
-/** @typedef {import('../../types/domain.ts').HeartRateSensor} HeartRateSensor */
+/** @typedef {import('./intake.js').IntakeCounts} IntakeCounts */
 
 /**
- * Sync exercises from Polar API + server-side cache into IndexedDB.
- * Returns { newExercises, total } with counts, and the ids of the new ones.
+ * Sync exercises from Polar into IndexedDB. `/api/exercises` returns the whole
+ * server-side exercise cache, which goes through intake as it is.
  *
- * @returns {Promise<{ newExercises: number, total: number, newIds?: string[] }>}
+ * @returns {Promise<{ counts: IntakeCounts, newIds: string[] }>}
  */
 export async function syncExercises() {
-  // Fetch from both Polar transaction and server-side cache in parallel
-  const [remote, cached] = await Promise.all([
-    getExercises(),
-    getCachedExercises().catch(() => []),
-  ]);
-
-  // Merge both sources, deduplicate by id
-  /** @type {Set<string>} */
-  const seen = new Set();
-  /** @type {Exercise[]} */
-  const merged = [];
-  for (const ex of [...remote, ...cached]) {
-    if (!seen.has(ex.id)) {
-      seen.add(ex.id);
-      merged.push(ex);
-    }
-  }
-
-  // Filter to running sports only
-  const runningExercises = merged.filter(isRunningSport);
-
-  if (runningExercises.length === 0) {
-    const existing = await getAll('exercises');
-    return { newExercises: 0, total: existing.length };
-  }
-
-  // Get existing IDs
-  const existing = await getAll('exercises');
-  const existingIds = new Set(existing.map((e) => e.id));
-
-  // Find new exercises
-  const newOnes = runningExercises.filter((e) => !existingIds.has(e.id));
-
-  if (newOnes.length > 0) {
-    // Auto-assign default shoe to new exercises
-    await assignDefaultShoe(newOnes);
-    await putMany('exercises', newOnes);
-  }
-
-  await backfillHrSensor(runningExercises, existing);
-
-  const total = existingIds.size + newOnes.length;
-  const newIds = newOnes.map((e) => e.id);
-  return { newExercises: newOnes.length, total, newIds };
-}
-
-/**
- * Copy the server's inferred heart rate sensor onto exercises already stored
- * locally. Classification runs server-side over the cached TCX, so it can
- * appear or be recalibrated long after an exercise was first synced. Only the
- * one field is touched — shoeId, overlap and cached detailData stay put.
- *
- * @param {Exercise[]} incoming
- * @param {Exercise[]} existing
- */
-async function backfillHrSensor(incoming, existing) {
-  /** @type {Map<string, HeartRateSensor>} */
-  const bySensor = new Map();
-  for (const e of incoming) {
-    if (e.hrSensor) bySensor.set(e.id, e.hrSensor);
-  }
-  if (bySensor.size === 0) return;
-
-  const updated = [];
-  for (const exercise of existing) {
-    const sensor = bySensor.get(exercise.id);
-    if (!sensor) continue;
-    if (exercise.hrSensor?.smoothness === sensor.smoothness) continue;
-    updated.push({ ...exercise, hrSensor: sensor });
-  }
-
-  if (updated.length > 0) {
-    await putMany('exercises', updated);
-  }
+  return ingestAndSave(await getExercises());
 }
 
 /**

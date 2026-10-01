@@ -28,16 +28,6 @@ router.get('/exercises', async (req, res) => {
   }
 });
 
-router.get('/exercises/cached', async (req, res) => {
-  try {
-    const cached = await readCache();
-    res.json(await withHrSensor(cached));
-  } catch (err) {
-    console.error('Cache read error:', (err as Error).message);
-    res.json([]);
-  }
-});
-
 router.delete('/exercises/:id', async (req, res) => {
   try {
     const removed = await removeFromCache(req.params.id);

@@ -65,15 +65,15 @@ async function doSync() {
 
   syncBtn.classList.add('syncing');
   try {
-    const result = await syncExercises();
+    const { counts, newIds } = await syncExercises();
     await recalcAllShoeKm();
 
-    if (result.newExercises > 0) {
-      showToast(`${result.newExercises} nieuwe activiteit(en) gesynchroniseerd`, 'success');
+    if (counts.newExercises > 0) {
+      const parts = [`${counts.newExercises} nieuwe activiteit(en) gesynchroniseerd`];
+      if (counts.overlaps > 0) parts.push(`${counts.overlaps} overlap gemarkeerd`);
+      showToast(parts.join(', '), 'success');
       // Fire-and-forget: eagerly cache TCX detail data for new exercises
-      if (result.newIds && result.newIds.length > 0) {
-        backgroundFetchDetails(result.newIds);
-      }
+      backgroundFetchDetails(newIds);
     } else {
       showToast('Alles is up-to-date', 'info');
     }

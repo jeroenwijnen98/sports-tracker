@@ -84,7 +84,7 @@ npm test                # node --test 'test/**/*.test.js'
 ```
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
-The tests cover pure logic only (import converters, overlap, heart rate sensor
+The tests cover pure logic only (import converters, overlap, intake, heart rate sensor
 classifier, formatters, running sports, HTML escaping) plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
@@ -119,7 +119,8 @@ their `smoothness` and `label`, so update it when recalibrating.
 
 - `public/js/app.js` — Entry point: auth check, tab switching, sync trigger
 - `public/js/db.js` — IndexedDB wrapper (3 stores: `exercises`, `shoes`, `settings`)
-- `public/js/sync.js` — Pulls exercises from backend, filters to running sports, recalculates shoe km. Exports `assignDefaultShoe(exercises)`, which the import handler in `app.js` uses too
+- `public/js/intake.js` — The one way exercises enter IndexedDB. Pure core `ingest(incoming, { existing, shoes }) → { toSave, updatedExisting, counts }`: running sport filter, new vs. stored by id, overlap (via `markOverlaps`), default shoe for new exercises only, and the heart rate sensor backfill onto stored exercises. `ingestAndSave(incoming)` reads the stores, calls `ingest`, writes the result in one transaction and returns `{ counts, newIds }`. No DOM in the core, so Node tests import it
+- `public/js/sync.js` — `syncExercises()` fetches `/api/exercises` (the whole server exercise cache) and hands it to `ingestAndSave`; also recalculates shoe km. Still exports `assignDefaultShoe(exercises)` for the import handler in `app.js`
 - `public/js/api.js` — Backend calls. `request()` handles 401 (reload) and errors; `{ duplicate: true }` turns a 409 into the existing exercise flagged `_duplicate`, which both import calls use
 - `public/js/views/` — Tab renderers (`activities.js`, `shoes.js`)
 - `public/js/components/` — Reusable UI: `runCard.js`, `shoeCard.js`, `modal.js`, `toast.js`
@@ -141,7 +142,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - **Dual exercise sources:** Sync combines Pull Notifications (transaction flow) with the Training Data API (`/v3/exercises`) and deduplicates by ID. The `/api/exercises/:id/tcx` and `/gpx` routes serve from server-side cache first, then fall back to the Training Data API
 - **Token never expires:** Single OAuth flow, token persisted server-side as JSON file
 - **CSS theme:** Dark background (#0D0D0D), neon-green accent (#CEFF00), defined in `public/css/variables.css`
-- **Heart rate sensor inference:** Since no field records which sensor was used, `hrSensor.ts` classifies it from the texture of the 1 Hz series — a chest strap keeps beat-to-beat detail, wrist optical is heavily filtered and repeats values. Classification hangs off `writeXmlCache()` so every newly cached TCX is labelled; `node scripts/classify-sensors.ts` rebuilds the whole map. The label rides along on the exercises endpoints and `sync.js` copies it into IndexedDB. **It is calibrated on 53 known chest strap runs plus the two runs in `src/services/hrSensorTruth.json` whose sensor is confirmed first-hand, so it is indicative only** — read `smoothness` rather than `label`, and recalibrate the constants marked `RECALIBRATE_ME` once more runs have a confirmed sensor. Add every run whose sensor you know to `hrSensorTruth.json`; `classify-sensors.ts` scores against it
+- **Heart rate sensor inference:** Since no field records which sensor was used, `hrSensor.ts` classifies it from the texture of the 1 Hz series — a chest strap keeps beat-to-beat detail, wrist optical is heavily filtered and repeats values. Classification hangs off `writeXmlCache()` so every newly cached TCX is labelled; `node scripts/classify-sensors.ts` rebuilds the whole map. The label rides along on the exercises endpoints and intake (`public/js/intake.js`) copies it into IndexedDB. **It is calibrated on 53 known chest strap runs plus the two runs in `src/services/hrSensorTruth.json` whose sensor is confirmed first-hand, so it is indicative only** — read `smoothness` rather than `label`, and recalibrate the constants marked `RECALIBRATE_ME` once more runs have a confirmed sensor. Add every run whose sensor you know to `hrSensorTruth.json`; `classify-sensors.ts` scores against it
 
 ## Polar AccessLink API
 

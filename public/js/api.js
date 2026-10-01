@@ -60,11 +60,6 @@ export function getExercises() {
   return request('/api/exercises');
 }
 
-/** @returns {Promise<Exercise[]>} */
-export function getCachedExercises() {
-  return request('/api/exercises/cached');
-}
-
 /**
  * Delete an exercise from the server-side cache. A 404 means the server never
  * had it (a local-only exercise), which counts as deleted.
