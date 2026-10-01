@@ -201,6 +201,67 @@ export async function putMany(storeName, items) {
 }
 
 /**
+ * One object store inside a `transaction()`.
+ * @template T
+ * @typedef {object} TxStore
+ * @property {(key: IDBValidKey) => Promise<T | undefined>} get
+ * @property {() => Promise<T[]>} getAll
+ * @property {(item: T) => Promise<IDBValidKey>} put
+ * @property {(item: T) => Promise<IDBValidKey>} add
+ * @property {(key: IDBValidKey) => Promise<void>} delete
+ */
+
+/**
+ * @template {StoreName} S
+ * @typedef {{ [K in S]: TxStore<Stores[K]> }} TxStores
+ */
+
+/**
+ * Run `fn` against several stores in one readwrite transaction. Resolves with
+ * what `fn` returns once the transaction has committed; if `fn` throws or a
+ * request fails, the transaction aborts and nothing is written. Inside `fn`,
+ * await only the requests on these stores: awaiting anything else lets the
+ * transaction commit early.
+ *
+ * @template {StoreName} S
+ * @template R
+ * @param {S[]} storeNames
+ * @param {(stores: TxStores<S>) => Promise<R>} fn
+ * @returns {Promise<R>}
+ */
+export async function transaction(storeNames, fn) {
+  const db = await open();
+  const t = db.transaction(storeNames, 'readwrite');
+  /** @type {Promise<void>} */
+  const committed = new Promise((resolve, reject) => {
+    t.oncomplete = () => resolve();
+    t.onabort = () => reject(t.error ?? new Error('Transaction aborted'));
+  });
+
+  const stores = /** @type {TxStores<S>} */ (Object.fromEntries(storeNames.map((name) => {
+    const store = t.objectStore(name);
+    return [name, {
+      get: (/** @type {IDBValidKey} */ key) => reqToPromise(store.get(key)),
+      getAll: () => reqToPromise(store.getAll()),
+      put: (/** @type {unknown} */ item) => reqToPromise(store.put(item)),
+      add: (/** @type {unknown} */ item) => reqToPromise(store.add(item)),
+      delete: (/** @type {IDBValidKey} */ key) => reqToPromise(store.delete(key)),
+    }];
+  })));
+
+  let result;
+  try {
+    result = await fn(stores);
+  } catch (err) {
+    committed.catch(() => {});
+    try { t.abort(); } catch { /* already aborted by the failed request */ }
+    throw err;
+  }
+  await committed;
+  return result;
+}
+
+/**
  * @param {string} key
  * @returns {Promise<unknown>}
  */

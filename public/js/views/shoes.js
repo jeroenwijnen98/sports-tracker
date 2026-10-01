@@ -1,10 +1,9 @@
 // @ts-check
 
-import { getAll, put, add, del } from '../db.js';
 import { createShoeCard } from '../components/shoeCard.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
-import { shoeTotals } from '../shoes.js';
+import { loadShoes, addShoe, updateShoe, deleteShoe, setDefaultShoe } from '../shoes.js';
 import { escapeHtml } from '../utils/html.js';
 
 /** @typedef {import('../../../types/domain.ts').Shoe} Shoe */
@@ -12,8 +11,7 @@ import { escapeHtml } from '../utils/html.js';
 const panel = /** @type {HTMLElement} */ (document.getElementById('tab-shoes'));
 
 export async function renderShoes() {
-  const [shoes, exercises] = await Promise.all([getAll('shoes'), getAll('exercises')]);
-  const totals = shoeTotals(shoes, exercises);
+  const { shoes, totals } = await loadShoes();
 
   // Sort: default first, then by name
   shoes.sort((a, b) => {
@@ -55,8 +53,8 @@ export async function renderShoes() {
     const totalKm = shoe.id === undefined ? 0 : totals.get(shoe.id) ?? 0;
     list.appendChild(createShoeCard(shoe, totalKm, {
       onEdit: (s) => openShoeModal(s),
-      onDelete: (s) => deleteShoe(s),
-      onSetDefault: (s) => setDefaultShoe(s),
+      onDelete: (s) => confirmDeleteShoe(s),
+      onSetDefault: (s) => makeDefault(s),
     }));
   }
 
@@ -113,21 +111,11 @@ function openShoeModal(shoe = null) {
 
     if (!name) return;
 
-    if (shoe) {
-      shoe.name = name;
-      shoe.brand = brand;
-      shoe.initialKm = initialKm;
-      await put('shoes', shoe);
+    if (shoe?.id !== undefined) {
+      await updateShoe(shoe.id, { name, brand, initialKm });
       showToast('Schoen bijgewerkt', 'success');
     } else {
-      /** @type {Shoe} */
-      const newShoe = { name, brand, initialKm, isDefault: false };
-      // If this is the first shoe, make it default
-      const existing = await getAll('shoes');
-      if (existing.length === 0) {
-        newShoe.isDefault = true;
-      }
-      await add('shoes', newShoe);
+      await addShoe({ name, brand, initialKm });
       showToast('Schoen toegevoegd', 'success');
     }
 
@@ -137,32 +125,20 @@ function openShoeModal(shoe = null) {
 }
 
 /** @param {Shoe} shoe */
-async function deleteShoe(shoe) {
+async function confirmDeleteShoe(shoe) {
   const { id } = shoe;
   if (id === undefined) return;
   if (!confirm(`"${shoe.name}" verwijderen?`)) return;
 
-  // Unassign exercises from this shoe
-  const exercises = await getAll('exercises');
-  for (const ex of exercises) {
-    if (ex.shoeId === id) {
-      delete ex.shoeId;
-      await put('exercises', ex);
-    }
-  }
-
-  await del('shoes', id);
+  await deleteShoe(id);
   showToast('Schoen verwijderd', 'success');
   await renderShoes();
 }
 
 /** @param {Shoe} shoe */
-async function setDefaultShoe(shoe) {
-  const shoes = await getAll('shoes');
-  for (const s of shoes) {
-    s.isDefault = s.id === shoe.id;
-    await put('shoes', s);
-  }
+async function makeDefault(shoe) {
+  if (shoe.id === undefined) return;
+  await setDefaultShoe(shoe.id);
   showToast(`${shoe.name} is nu de standaard schoen`, 'success');
   await renderShoes();
 }
