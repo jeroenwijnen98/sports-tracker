@@ -1,18 +1,20 @@
 // @ts-check
 
 import { get, del } from '../db.js';
-import { load } from '../services/detailData.js';
+import { load, forget } from '../services/detailData.js';
 import { deleteExercise } from '../api.js';
 import { renderActivities } from './activities.js';
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
 import { formatDate, formatTime } from '../utils/date.js';
 import { escapeHtml } from '../utils/html.js';
+import { createCurrentView } from '../utils/currentView.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
 /** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
 /** @typedef {import('../../../types/domain.ts').DetailData} DetailData */
 /** @typedef {import('../../../types/domain.ts').Trackpoint} Trackpoint */
+/** @typedef {import('../utils/currentView.js').ViewTicket} ViewTicket */
 
 /**
  * Leaflet, as the CDN script puts it on `window.L`. Only its types come from
@@ -24,10 +26,15 @@ const container = /** @type {HTMLElement} */ (document.getElementById('run-detai
 /** @type {import('leaflet').Map | null} */
 let leafletMap = null;
 
+// Every await below checks its ticket: a result for a run that is no longer
+// on screen must not draw into the view of the one that is.
+const view = createCurrentView();
+
 /** @param {string} exerciseId */
 export async function openRunDetail(exerciseId) {
+  const ticket = view.open(exerciseId);
   const exercise = await get('exercises', exerciseId);
-  if (!exercise) return;
+  if (!exercise || !view.isCurrent(ticket)) return;
 
   const distance = exercise.distance || 0;
   const durationSec = parseISODuration(exercise.duration);
@@ -115,20 +122,21 @@ export async function openRunDetail(exerciseId) {
 
   // Load detail data
   const detail = await load(exerciseId);
+  if (!view.isCurrent(ticket)) return;
   const loadingEl = document.getElementById('run-detail-loading');
   if (loadingEl) loadingEl.style.display = 'none';
 
   if (detail) {
     renderChart(detail);
     renderLaps(detail);
-    renderMap(detail);
+    renderMap(detail, ticket);
   } else {
-    showRetryButton(exerciseId);
+    showRetryButton(ticket);
   }
 }
 
-/** @param {string} exerciseId */
-function showRetryButton(exerciseId) {
+/** @param {ViewTicket} ticket */
+function showRetryButton(ticket) {
   const chartSection = document.getElementById('run-detail-chart-section');
   if (!chartSection) return;
 
@@ -145,12 +153,13 @@ function showRetryButton(exerciseId) {
     retryBtn.textContent = 'Laden...';
     retryBtn.disabled = true;
 
-    const detail = await load(exerciseId, { force: true });
+    const detail = await load(ticket.exerciseId, { force: true });
+    if (!view.isCurrent(ticket)) return;
     if (detail) {
       chartSection.innerHTML = chartMarkup();
       renderChart(detail);
       renderLaps(detail);
-      renderMap(detail);
+      renderMap(detail, ticket);
       showToast('Details geladen', 'success');
     } else {
       retryBtn.textContent = 'Opnieuw proberen';
@@ -161,6 +170,7 @@ function showRetryButton(exerciseId) {
 }
 
 export function closeRunDetail() {
+  view.close();
   destroyMap();
   container.classList.remove('active');
   container.innerHTML = '';
@@ -709,8 +719,11 @@ function renderLaps(detail) {
 
 /* ── Map ── */
 
-/** @param {DetailData} detail */
-async function renderMap(detail) {
+/**
+ * @param {DetailData} detail
+ * @param {ViewTicket} ticket
+ */
+async function renderMap(detail, ticket) {
   if (!detail.hasGps || detail.route.length === 0) return;
 
   const section = /** @type {HTMLElement} */ (document.getElementById('run-detail-map-section'));
@@ -718,6 +731,7 @@ async function renderMap(detail) {
 
   // Dynamically load Leaflet
   const L = await loadLeaflet();
+  if (!view.isCurrent(ticket)) return;
 
   const mapEl = /** @type {HTMLElement} */ (document.getElementById('run-detail-map'));
   const map = L.map(mapEl, {
@@ -825,6 +839,7 @@ function confirmDelete(exercise) {
     }
     await del('exercises', exercise.id);
     closeRunDetail();
+    await forget(exercise.id);
     await renderActivities();
     showToast('Activiteit verwijderd', 'success');
   });

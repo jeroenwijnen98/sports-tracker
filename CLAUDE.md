@@ -84,7 +84,7 @@ npm test                # node --test 'test/**/*.test.js'
 ```
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
-The tests cover pure logic only (import converters, overlap, intake, shoe totals, the default shoe rule, detail data loading,
+The tests cover pure logic only (import converters, overlap, intake, shoe totals, the default shoe rule, detail data loading, the detail view's current-run ticket,
 heart rate sensor classifier, formatters, running sports, HTML escaping), the transaction consumer and `syncFromPolar()` against a fake `request`, plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
@@ -130,7 +130,8 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `public/js/utils/sports.js` — `RUNNING_SPORTS`, their labels, `isRunningSport(exercise)` and the `isRunningSportName(sport)` type guard: the one running sport list, also imported by `src/services/importConverters.ts`
 - `public/js/utils/html.js` — `escapeHtml()`, the one escaper for user- or file-controlled strings (shoe name/brand, device) put into markup
 - `public/js/utils/overlap.js` — `markOverlaps(imported, existing)`: marks the phone recording (Polar Beat, or no device) as overlap when a watch recording started within 5 minutes and overlaps in time, both within an import batch and against stored exercises. Pure; the import handler in `app.js` saves the result
-- `public/js/services/detailData.js` — One function, `load(exerciseId, { force })`: reads the `details` store, else fetches TCX (GPX only when there is no TCX), parses and stores it. Concurrent loads of one id share a fetch; `force` (the retry button) ignores the unavailable marker. Never touches the `exercises` store. `createDetailLoader()` takes the store and fetchers, so Node tests inject both
+- `public/js/services/detailData.js` — One function, `load(exerciseId, { force })`: reads the `details` store, else fetches TCX (GPX only when there is no TCX), parses and stores it. Concurrent loads of one id share a fetch; `force` (the retry button) ignores the unavailable marker. Never touches the `exercises` store. `forget(id)` removes an exercise's entry once any load of it in flight has finished; deleting from the detail view calls it. `createDetailLoader()` takes the store and fetchers and returns both, so Node tests inject them
+- `public/js/utils/currentView.js` — `createCurrentView()`: the ticket the detail view takes on each opening. `runDetail.js` checks it after every await, so a load (initial or retry) or Leaflet arriving for another run, or after the view closed, draws nothing
 - `public/js/utils/tcxParser.js` — Parses TCX XML into laps, trackpoints (HR, speed, distance), route coordinates
 - `public/js/utils/gpxParser.js` — Parses GPX XML into route coordinates
 - `public/js/views/runDetail.js` — Full-screen detail overlay with HR/pace chart, laps table, and Leaflet map
