@@ -150,7 +150,7 @@ test('a failed transaction list is reported and nothing is committed', async () 
   });
 
   assert.deepEqual(result, { secured: [], failed: [LIST] });
-  assert.equal(log.length, 2);
+  assert.deepEqual(log, ['POST /users/42/exercise-transactions', `GET ${LIST}`]);
 });
 
 test('a 204 on create returns nothing and sends no commit', async () => {

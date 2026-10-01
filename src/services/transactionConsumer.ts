@@ -32,7 +32,7 @@ export interface ConsumeResult {
  */
 export const diskStore: TransactionStore = {
   async saveExercise(exercise) {
-    if ((await readDeletedIds()).has(String(exercise.id))) return;
+    if ((await readDeletedIds()).has(exercise.id)) return;
     await appendToCache([exercise]);
   },
   async hasXml(type, exerciseId) {
