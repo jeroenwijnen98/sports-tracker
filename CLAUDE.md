@@ -84,7 +84,7 @@ npm test                # node --test 'test/**/*.test.js'
 ```
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
-The tests cover pure logic only (import converters, overlap, intake, shoe totals, detail data loading,
+The tests cover pure logic only (import converters, overlap, intake, shoe totals, the default shoe rule, detail data loading,
 heart rate sensor classifier, formatters, running sports, HTML escaping), the transaction consumer against a fake `request`, plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
@@ -119,9 +119,9 @@ their `smoothness` and `label`, so update it when recalibrating.
 **Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler. The `.js` is served as it is and type-checked through JSDoc against `types/domain.ts`.
 
 - `public/js/app.js` — Entry point: auth check, tab switching, sync trigger
-- `public/js/db.js` — IndexedDB wrapper (4 stores: `exercises`, `shoes`, `settings`, `details`). Version 2 created `details` and moved each exercise's old `detailData` field into it (`splitDetailData`)
+- `public/js/db.js` — IndexedDB wrapper (4 stores: `exercises`, `shoes`, `settings`, `details`). `transaction(storeNames, fn)` runs one readwrite transaction over several stores; inside `fn`, await only its own requests or it commits early. Version 2 created `details` and moved each exercise's old `detailData` field into it (`splitDetailData`)
 - `public/js/intake.js` — The one way exercises enter IndexedDB. Pure core `ingest(incoming, { existing, shoes }) → { toSave, updatedExisting, counts }`: running sport filter, new vs. stored by id, overlap (via `markOverlaps`), default shoe for new exercises only, and the heart rate sensor backfill onto stored exercises. `ingestAndSave(incoming)` reads the stores, calls `ingest`, writes the result in one transaction and returns `{ counts, newIds }`. No DOM in the core, so Node tests import it
-- `public/js/shoes.js` — Shoes module, no DOM. Pure `shoeTotals(shoes, exercises) → Map<shoeId, km>`, called by the shoes view once per render
+- `public/js/shoes.js` — Shoes module, no DOM; the shoes view goes through it and never touches the `shoes` store. Pure `shoeTotals(shoes, exercises) → Map<shoeId, km>` (via `loadShoes()`, once per render). `addShoe`, `updateShoe`, `deleteShoe` and `setDefaultShoe` each run as one transaction (`transaction()` in `db.js`) and leave exactly one default shoe whenever any exists, through pure `oneDefault()`: the first shoe becomes the default, deleting the default promotes the newest remaining shoe, deleting a shoe unassigns its exercises. `createShoeOperations(transact)` takes the transaction, so Node tests inject an in-memory one
 - `public/js/sync.js` — `syncExercises()` fetches `/api/exercises` (the whole server exercise cache) and hands it to `ingestAndSave`. Still exports `assignDefaultShoe(exercises)` for the import handler in `app.js`
 - `public/js/api.js` — Backend calls. `request()` handles 401 (reload) and errors; `{ duplicate: true }` turns a 409 into the existing exercise flagged `_duplicate`, which both import calls use
 - `public/js/views/` — Tab renderers (`activities.js`, `shoes.js`)
