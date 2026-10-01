@@ -152,6 +152,18 @@ The Polar API has two separate data access paths that behave very differently:
 - **De-registering a user** (`DELETE /v3/users/{userId}`) resets the Pull Notifications state but does NOT bring back historically consumed exercises through that channel. Use this as a last resort
 - **User ID** is returned in the OAuth token response as `x_user_id` and persisted in `token.json`
 
+### An uncommitted exercise transaction
+
+Checked against the AccessLink v3 reference (polar.com/accesslink-api, "Exercises (deprecated)" section, read 2026-10-01), Polar's own `accesslink-example-python` and the issues on it. No transaction was opened against the live account to find out.
+
+- **Does it block the next one?** Undocumented. `POST …/exercise-transactions` lists only 201 (new transaction), 204 (no new training data) and 403; no status for "a transaction is already open", and nothing says whether a second POST returns the open transaction, a new one, or 204.
+- **Does it expire, and when?** Undocumented. The reference gives no lifetime for a transaction. It does say only exercises uploaded to Flow in the last 30 days are offered (28 in the section intro).
+- **What happens to its exercises?** Only the commit is documented as removing them: `PUT` answers 200 "Transaction has been committed and data deleted". Polar's maintainer confirms only committed exercises stop being offered (accesslink-example-python#3). Whether an expired transaction's exercises are offered again or dropped is undocumented.
+- **Can its exercises, TCX and GPX be fetched more than once?** Not stated outright, but implied: the GETs carry no "once only" note, and the data is deleted only on commit.
+- The transactional exercise endpoints are marked **deprecated** in favour of the non-transactional `/v3/exercises`. That API serves the same exercises with TCX/GPX for 30 days, whatever the transaction's state.
+
+**Partial-failure policy for the transaction consumer:** commit only when every exercise in the transaction, with its TCX and GPX, is on disk. If anything fails, **leave the transaction open**, don't commit, and report the failed exercise ids. The next sync retries. Committing anyway is the only choice certain to lose data: commit is the one documented way to delete it. If an open transaction blocks or expires, that is at worst no worse than committing. Even then the Training Data API top-up in `syncFromPolar()` still picks up new exercises for 30 days. So don't commit in an error path "so it doesn't block future ones", because that assumption is undocumented. If sync logs show the same open transaction never clearing, ask b2bhelpdesk@polar.com rather than testing it on the live account.
+
 ## Gotchas
 
 - IndexedDB key paths cannot contain hyphens. Polar API returns fields like `start-time` and `detailed-sport-info` — access these with bracket notation, never use them as IndexedDB indexes
