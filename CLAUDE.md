@@ -85,7 +85,7 @@ npm test                # node --test 'test/**/*.test.js'
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
 The tests cover pure logic only (import converters, overlap, intake, heart rate sensor
-classifier, formatters, running sports, HTML escaping) plus the exercise cache against a temp directory — no
+classifier, formatters, running sports, HTML escaping), the transaction consumer against a fake `request`, plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
 
@@ -108,6 +108,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `src/routes/api.ts` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (DELETE only, to remove it from the exercise cache), `/api/exercises/:id/:type` (one handler for `tcx` and `gpx`; any other type falls through to 404), plus the `/api/exercises/import` (TCX) and `/import-json` (Polar data export) routes. Protected by `tokenCheck` middleware
 - `src/services/importConverters.ts` — Pure converters behind the import routes: `polarJsonToTcx(session)`, `polarJsonToExercise(session)`, `extractTcxMetadata(xml)`. Both import paths derive the same `import-…` id from the start time
 - `src/services/polarApi.ts` — `polarRequest(accessToken, pathOrUrl, { method, accept, body })` is the one AccessLink HTTP helper (auth header, Accept, throw on non-2xx); everything that talks to AccessLink goes through it. `XML_ACCEPT` maps `tcx`/`gpx` to their Accept types. Also implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit), eagerly fetching and caching TCX/GPX during the transaction before commit
+- `src/services/transactionConsumer.ts` — `consumeTransaction({ request, store, userId }) → { secured, failed }`: the whole Pull Notifications sequence with the secure-before-commit invariant. `request` is `polarRequest` with the token bound, `store` writes exercise JSON and TCX/GPX; `diskStore` (exercise cache + XML cache) is the real one and skips deleted exercises. Commits only when nothing failed, otherwise leaves the transaction open and returns the failed URLs. Not wired into `syncFromPolar()` yet
 - `src/services/polarSync.ts` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.ts`
 - `src/services/polarAuth.ts` — OAuth token exchange with Basic auth, user registration
 - `src/services/tokenStore.ts` — Reads/writes `src/data/token.json` (gitignored)
@@ -165,7 +166,7 @@ Checked against the AccessLink v3 reference (polar.com/accesslink-api, "Exercise
 
 **Partial-failure policy for the transaction consumer:** commit only when every exercise in the transaction, with its TCX and GPX, is on disk. If anything fails, **leave the transaction open**, don't commit, and report the failed exercise ids. The next sync retries. Committing anyway is the only choice certain to lose data: commit is the one documented way to delete it. If an open transaction blocks or expires, that is at worst no worse than committing. Even then the Training Data API top-up in `syncFromPolar()` still picks up new exercises for 30 days. So don't commit in an error path "so it doesn't block future ones", because that assumption is undocumented. If sync logs show the same open transaction never clearing, ask b2bhelpdesk@polar.com rather than testing it on the live account.
 
-`getExercises()` in `src/services/polarApi.ts` does not follow this policy yet: it still commits after a failed exercise fetch and in its error path. Bringing it in line is PRD #18.
+`consumeTransaction()` in `src/services/transactionConsumer.ts` follows this policy. `getExercises()` in `src/services/polarApi.ts`, which `syncFromPolar()` still calls, does not: it commits after a failed exercise fetch and in its error path. Switching sync over and removing it is PRD #18's last ticket (#21).
 
 ## Gotchas
 
