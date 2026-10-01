@@ -85,7 +85,7 @@ npm test                # node --test 'test/**/*.test.js'
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
 The tests cover pure logic only (import converters, overlap, intake, shoe totals, detail data loading,
-heart rate sensor classifier, formatters, running sports, HTML escaping), the transaction consumer against a fake `request`, plus the exercise cache against a temp directory — no
+heart rate sensor classifier, formatters, running sports, HTML escaping), the transaction consumer and `syncFromPolar()` against a fake `request`, plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
 
@@ -107,9 +107,9 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `src/routes/auth.ts` — OAuth2 flow: `/auth/login`, `/auth/callback`, `/auth/status`, `/auth/logout`
 - `src/routes/api.ts` — Polar API proxy: `/api/exercises`, `/api/exercises/:id` (DELETE only, to remove it from the exercise cache), `/api/exercises/:id/:type` (one handler for `tcx` and `gpx`; any other type falls through to 404), plus the `/api/exercises/import` (TCX) and `/import-json` (Polar data export) routes. Protected by `tokenCheck` middleware
 - `src/services/importConverters.ts` — Pure converters behind the import routes: `polarJsonToTcx(session)`, `polarJsonToExercise(session)`, `extractTcxMetadata(xml)`. Both import paths derive the same `import-…` id from the start time
-- `src/services/polarApi.ts` — `polarRequest(accessToken, pathOrUrl, { method, accept, body })` is the one AccessLink HTTP helper (auth header, Accept, throw on non-2xx); everything that talks to AccessLink goes through it. `XML_ACCEPT` maps `tcx`/`gpx` to their Accept types. Also implements Polar's transaction-based exercise fetch (POST create → GET list → GET each → PUT commit), eagerly fetching and caching TCX/GPX during the transaction before commit
-- `src/services/transactionConsumer.ts` — `consumeTransaction({ request, store, userId }) → { secured, failed }`: the whole Pull Notifications sequence with the secure-before-commit invariant. `request` is `polarRequest` with the token bound, `store` writes exercise JSON and TCX/GPX; `diskStore` (exercise cache + XML cache) is the real one and skips deleted exercises. Commits only when nothing failed, otherwise leaves the transaction open and returns the failed URLs. Not wired into `syncFromPolar()` yet
-- `src/services/polarSync.ts` — `syncFromPolar()`: the one place both Polar sources are combined (transaction flow, cache every exercise whatever its sport, then Training Data API top-up whose failure is only logged). Called by `/api/exercises` and `scripts/sync.ts`
+- `src/services/polarApi.ts` — `polarRequest(accessToken, pathOrUrl, { method, accept, body })` is the one AccessLink HTTP helper (auth header, Accept, throw on non-2xx); everything that talks to AccessLink goes through it. `withToken(accessToken)` binds the token, giving the `request` the sync takes. `XML_ACCEPT` maps `tcx`/`gpx` to their Accept types. It knows nothing about transactions
+- `src/services/transactionConsumer.ts` — `consumeTransaction({ request, store, userId }) → { secured, failed }`: the one place that owns the Pull Notifications transaction (POST create → GET list → GET each exercise with its TCX/GPX → PUT commit) and its secure-before-commit invariant. `request` is `polarRequest` with the token bound, `store` writes exercise JSON and TCX/GPX; `diskStore` (exercise cache + XML cache) is the real one and skips deleted exercises. Commits only when nothing failed, otherwise leaves the transaction open and returns the failed URLs
+- `src/services/polarSync.ts` — `syncFromPolar({ request, userId }) → SyncResult`: the one place both Polar sources are combined (`consumeTransaction()` with `diskStore`, which caches every exercise whatever its sport, then the Training Data API top-up whose failure is only logged). It skips deleted exercises from the Training Data API itself; `diskStore` does so for the transaction. `SyncResult.failed` carries the consumer's failed URLs. Called by `/api/exercises` and `scripts/sync.ts`, which writes each failed URL to `logs/sync.log`
 - `src/services/polarAuth.ts` — OAuth token exchange with Basic auth, user registration
 - `src/services/tokenStore.ts` — Reads/writes `src/data/token.json` (gitignored)
 - `src/services/xmlCache.ts` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
@@ -140,7 +140,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - **Sport filter:** Only `RUNNING`, `TRAIL_RUNNING`, `TREADMILL_RUNNING`, `ULTRARUNNING_RUNNING` are synced/shown — defined once in `public/js/utils/sports.js`
 - **Shoe km tracking:** a shoe's total is initial km plus the distance of every assigned exercise that is not an overlap. It is not stored: `shoeTotals(shoes, exercises)` in `public/js/shoes.js` derives it each time the shoes tab renders, so deleting an exercise or changing its overlap state needs no extra call. Older shoe records may still carry a stale `totalKm` field; nothing reads it
 - **Polar API constraint:** The transaction flow (POST/GET/PUT) means each exercise can only be fetched once — local IndexedDB storage is the permanent record
-- **Eager TCX/GPX caching:** TCX and GPX are fetched and saved to disk during the sync transaction (before commit), because they become permanently inaccessible after commit. The server-side cache in `src/data/tcx/` and `src/data/gpx/` is the permanent record for detail data
+- **Eager TCX/GPX caching:** `consumeTransaction()` fetches TCX and GPX and saves them to disk, with the exercise JSON, during the sync transaction (before commit), because they become permanently inaccessible after commit. The server-side cache in `src/data/tcx/` and `src/data/gpx/` is the permanent record for detail data
 - **Dual exercise sources:** Sync combines Pull Notifications (transaction flow) with the Training Data API (`/v3/exercises`) and deduplicates by ID. The `/api/exercises/:id/tcx` and `/gpx` routes serve from server-side cache first, then fall back to the Training Data API
 - **Token never expires:** Single OAuth flow, token persisted server-side as JSON file
 - **CSS theme:** Dark background (#0D0D0D), neon-green accent (#CEFF00), defined in `public/css/variables.css`
@@ -150,7 +150,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 
 The Polar API has two separate data access paths that behave very differently:
 
-- **Pull Notifications (transaction flow):** `POST /v3/users/{userId}/exercise-transactions` → `GET list` → `GET each` → `PUT commit`. This is one-time consumption — once committed, exercises and their TCX/GPX are gone forever. TCX/GPX must be fetched during the transaction using `{exerciseUrl}/tcx` (the full transaction URL, NOT `/v3/exercises/{id}/tcx`). After de-registration and re-registration, only exercises recorded after the new registration date appear
+- **Pull Notifications (transaction flow):** `POST /v3/users/{userId}/exercise-transactions` → `GET list` → `GET each` → `PUT commit`. Owned by `consumeTransaction()`. This is one-time consumption — once committed, exercises and their TCX/GPX are gone forever. TCX/GPX must be fetched during the transaction using `{exerciseUrl}/tcx` (the full transaction URL, NOT `/v3/exercises/{id}/tcx`). After de-registration and re-registration, only exercises recorded after the new registration date appear
 - **Training Data API:** `GET /v3/exercises`, `GET /v3/exercises/{id}/tcx`. Separate system that provides persistent access to exercises. Not one-time consumption — data can be re-fetched. May take time to populate after user registration. Requires the user's Polar watch to sync via the Polar Flow app first
 - **De-registering a user** (`DELETE /v3/users/{userId}`) resets the Pull Notifications state but does NOT bring back historically consumed exercises through that channel. Use this as a last resort
 - **User ID** is returned in the OAuth token response as `x_user_id` and persisted in `token.json`
@@ -167,7 +167,7 @@ Checked against the AccessLink v3 reference (polar.com/accesslink-api, "Exercise
 
 **Partial-failure policy for the transaction consumer:** commit only when every exercise in the transaction, with its TCX and GPX, is on disk. If anything fails, **leave the transaction open**, don't commit, and report the failed exercise ids. The next sync retries. Committing anyway is the only choice certain to lose data: commit is the one documented way to delete it. If an open transaction blocks or expires, that is at worst no worse than committing. Even then the Training Data API top-up in `syncFromPolar()` still picks up new exercises for 30 days. So don't commit in an error path "so it doesn't block future ones", because that assumption is undocumented. If sync logs show the same open transaction never clearing, ask b2bhelpdesk@polar.com rather than testing it on the live account.
 
-`consumeTransaction()` in `src/services/transactionConsumer.ts` follows this policy. `getExercises()` in `src/services/polarApi.ts`, which `syncFromPolar()` still calls, does not: it commits after a failed exercise fetch and in its error path. Switching sync over and removing it is PRD #18's last ticket (#21).
+`consumeTransaction()` in `src/services/transactionConsumer.ts` follows this policy, and both sync entry points go through it. A transaction left open shows up in `logs/sync.log` as `[sync]   failed: <url>` lines.
 
 ## Gotchas
 

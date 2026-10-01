@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import express from 'express';
 import { tokenCheck } from '../middleware/tokenCheck.ts';
-import { polarRequest, XML_ACCEPT } from '../services/polarApi.ts';
+import { polarRequest, withToken, XML_ACCEPT } from '../services/polarApi.ts';
 import { syncFromPolar } from '../services/polarSync.ts';
 import { readCache, appendToCache, removeFromCache } from '../services/exerciseCache.ts';
 import { readXmlCache, writeXmlCache, isXmlType } from '../services/xmlCache.ts';
@@ -17,7 +17,7 @@ router.use(tokenCheck);
 router.get('/exercises', async (req, res) => {
   try {
     // tokenCheck has set both, or the request never got here
-    await syncFromPolar({ accessToken: req.accessToken!, userId: req.polarUserId! });
+    await syncFromPolar({ request: withToken(req.accessToken!), userId: req.polarUserId! });
 
     // Return all cached exercises (combines both sources)
     const all = await readCache();
