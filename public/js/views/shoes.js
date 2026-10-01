@@ -4,7 +4,7 @@ import { getAll, put, add, del } from '../db.js';
 import { createShoeCard } from '../components/shoeCard.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
-import { recalcShoeKm } from '../sync.js';
+import { shoeTotals } from '../shoes.js';
 import { escapeHtml } from '../utils/html.js';
 
 /** @typedef {import('../../../types/domain.ts').Shoe} Shoe */
@@ -12,7 +12,8 @@ import { escapeHtml } from '../utils/html.js';
 const panel = /** @type {HTMLElement} */ (document.getElementById('tab-shoes'));
 
 export async function renderShoes() {
-  const shoes = await getAll('shoes');
+  const [shoes, exercises] = await Promise.all([getAll('shoes'), getAll('exercises')]);
+  const totals = shoeTotals(shoes, exercises);
 
   // Sort: default first, then by name
   shoes.sort((a, b) => {
@@ -51,7 +52,8 @@ export async function renderShoes() {
   list.className = 'card-list';
 
   for (const shoe of shoes) {
-    list.appendChild(createShoeCard(shoe, {
+    const totalKm = (shoe.id !== undefined && totals.get(shoe.id)) || 0;
+    list.appendChild(createShoeCard(shoe, totalKm, {
       onEdit: (s) => openShoeModal(s),
       onDelete: (s) => deleteShoe(s),
       onSetDefault: (s) => setDefaultShoe(s),
@@ -116,11 +118,10 @@ function openShoeModal(shoe = null) {
       shoe.brand = brand;
       shoe.initialKm = initialKm;
       await put('shoes', shoe);
-      if (shoe.id !== undefined) await recalcShoeKm(shoe.id);
       showToast('Schoen bijgewerkt', 'success');
     } else {
       /** @type {Shoe} */
-      const newShoe = { name, brand, initialKm, totalKm: initialKm, isDefault: false };
+      const newShoe = { name, brand, initialKm, isDefault: false };
       // If this is the first shoe, make it default
       const existing = await getAll('shoes');
       if (existing.length === 0) {

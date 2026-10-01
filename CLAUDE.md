@@ -84,7 +84,7 @@ npm test                # node --test 'test/**/*.test.js'
 ```
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
-The tests cover pure logic only (import converters, overlap, intake, heart rate sensor
+The tests cover pure logic only (import converters, overlap, intake, shoe totals, heart rate sensor
 classifier, formatters, running sports, HTML escaping) plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
@@ -120,7 +120,8 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `public/js/app.js` — Entry point: auth check, tab switching, sync trigger
 - `public/js/db.js` — IndexedDB wrapper (3 stores: `exercises`, `shoes`, `settings`)
 - `public/js/intake.js` — The one way exercises enter IndexedDB. Pure core `ingest(incoming, { existing, shoes }) → { toSave, updatedExisting, counts }`: running sport filter, new vs. stored by id, overlap (via `markOverlaps`), default shoe for new exercises only, and the heart rate sensor backfill onto stored exercises. `ingestAndSave(incoming)` reads the stores, calls `ingest`, writes the result in one transaction and returns `{ counts, newIds }`. No DOM in the core, so Node tests import it
-- `public/js/sync.js` — `syncExercises()` fetches `/api/exercises` (the whole server exercise cache) and hands it to `ingestAndSave`; also recalculates shoe km. Still exports `assignDefaultShoe(exercises)` for the import handler in `app.js`
+- `public/js/shoes.js` — Shoes module, no DOM. Pure `shoeTotals(shoes, exercises) → Map<shoeId, km>`, called by the shoes view once per render
+- `public/js/sync.js` — `syncExercises()` fetches `/api/exercises` (the whole server exercise cache) and hands it to `ingestAndSave`. Still exports `assignDefaultShoe(exercises)` for the import handler in `app.js`
 - `public/js/api.js` — Backend calls. `request()` handles 401 (reload) and errors; `{ duplicate: true }` turns a 409 into the existing exercise flagged `_duplicate`, which both import calls use
 - `public/js/views/` — Tab renderers (`activities.js`, `shoes.js`)
 - `public/js/components/` — Reusable UI: `runCard.js`, `shoeCard.js`, `modal.js`, `toast.js`
@@ -136,7 +137,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 ## Key Design Decisions
 
 - **Sport filter:** Only `RUNNING`, `TRAIL_RUNNING`, `TREADMILL_RUNNING`, `ULTRARUNNING_RUNNING` are synced/shown — defined once in `public/js/utils/sports.js`
-- **Shoe km tracking:** `totalKm = initialKm + sum(assigned exercise distances)`. Recalculated on sync and shoe edit
+- **Shoe km tracking:** a shoe's total is initial km plus the distance of every assigned exercise that is not an overlap. It is not stored: `shoeTotals(shoes, exercises)` in `public/js/shoes.js` derives it each time the shoes tab renders, so deleting an exercise or changing its overlap state needs no extra call. Older shoe records may still carry a stale `totalKm` field; nothing reads it
 - **Polar API constraint:** The transaction flow (POST/GET/PUT) means each exercise can only be fetched once — local IndexedDB storage is the permanent record
 - **Eager TCX/GPX caching:** TCX and GPX are fetched and saved to disk during the sync transaction (before commit), because they become permanently inaccessible after commit. The server-side cache in `src/data/tcx/` and `src/data/gpx/` is the permanent record for detail data
 - **Dual exercise sources:** Sync combines Pull Notifications (transaction flow) with the Training Data API (`/v3/exercises`) and deduplicates by ID. The `/api/exercises/:id/tcx` and `/gpx` routes serve from server-side cache first, then fall back to the Training Data API

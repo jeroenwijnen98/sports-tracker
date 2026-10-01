@@ -7,14 +7,15 @@ import { escapeHtml } from '../utils/html.js';
 /**
  * Create a shoe card element.
  * @param {Shoe} shoe
+ * @param {number} totalKm Derived by `shoeTotals()`, not stored on the shoe.
  * @param {{ onEdit: (shoe: Shoe) => void, onDelete: (shoe: Shoe) => void, onSetDefault: (shoe: Shoe) => void }} handlers
  * @returns {HTMLDivElement}
  */
-export function createShoeCard(shoe, { onEdit, onDelete, onSetDefault }) {
+export function createShoeCard(shoe, totalKm, { onEdit, onDelete, onSetDefault }) {
   const el = document.createElement('div');
   el.className = 'shoe-card';
 
-  const km = (shoe.totalKm || 0).toFixed(1);
+  const km = totalKm.toFixed(1);
 
   el.innerHTML = `
     <div class="shoe-card-icon">👟</div>

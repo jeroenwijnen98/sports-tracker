@@ -161,8 +161,6 @@ export interface Shoe {
   brand?: string;
   /** Kilometres run before the shoe was entered here. */
   initialKm: number;
-  /** initialKm plus every assigned exercise that is not an overlap. */
-  totalKm: number;
   /** Exactly one shoe is the default shoe. */
   isDefault: boolean;
 }
