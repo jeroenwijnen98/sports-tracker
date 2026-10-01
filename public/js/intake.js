@@ -41,9 +41,10 @@ export function ingest(incoming, { existing, shoes }) {
   const marked = markOverlaps([...fresh.values()], existing);
 
   const defaultShoeId = shoes.find((s) => s.isDefault)?.id;
-  const toSave = marked.imported.map((ex) =>
-    ex.shoeId || defaultShoeId === undefined ? ex : { ...ex, shoeId: defaultShoeId }
-  );
+  const toSave = marked.imported.map((ex) => {
+    if (ex.shoeId || defaultShoeId === undefined) return ex;
+    return { ...ex, shoeId: defaultShoeId };
+  });
 
   /** @type {Map<string, Exercise>} */
   const updated = new Map(marked.updatedExisting.map((e) => [e.id, e]));
