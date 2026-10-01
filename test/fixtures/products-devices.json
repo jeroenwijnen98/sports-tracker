@@ -1,0 +1,15 @@
+{
+  "devices": [
+    { "deviceId": "AAAA0001", "name": "Polar Pacer" },
+    { "deviceId": "AAAA0002" }
+  ],
+  "archivedDevices": [
+    { "deviceId": "BBBB0001", "archived": "2024-03-01T10:00:00.000Z" },
+    { "deviceId": "BBBB0002", "archived": "2024-05-01T10:00:00.000Z" }
+  ],
+  "productRegistrationEvents": [
+    { "eventType": "CREATE", "modelName": "Polar Ignite", "archived": "2024-03-01T10:00:00.000Z" },
+    { "eventType": "DELETE", "modelName": "Polar Vantage M", "archived": "2024-03-01T10:00:00.000Z" },
+    { "eventType": "DELETE", "modelName": "Polar Unmatched", "archived": "2023-01-01T00:00:00.000Z" }
+  ]
+}
