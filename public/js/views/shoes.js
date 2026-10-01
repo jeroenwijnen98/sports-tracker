@@ -52,7 +52,7 @@ export async function renderShoes() {
   list.className = 'card-list';
 
   for (const shoe of shoes) {
-    const totalKm = (shoe.id !== undefined && totals.get(shoe.id)) || 0;
+    const totalKm = shoe.id === undefined ? 0 : totals.get(shoe.id) ?? 0;
     list.appendChild(createShoeCard(shoe, totalKm, {
       onEdit: (s) => openShoeModal(s),
       onDelete: (s) => deleteShoe(s),
