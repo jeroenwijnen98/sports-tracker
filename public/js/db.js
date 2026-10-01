@@ -63,22 +63,28 @@ function open() {
 }
 
 /**
+ * What version 1 kept on an exercise when neither TCX nor GPX could be
+ * fetched. Markers written before a rename carry `timestamp` instead of
+ * `checkedAt`.
+ * @typedef {{ unavailable: true, checkedAt?: number, timestamp?: number }} LegacyUnavailableMarker
+ */
+
+/**
  * Version 1 kept detail data as a `detailData` field on each exercise. Split a
  * version 1 exercise record into the exercise without it and its details
- * entry, if it had one. Old unavailable markers carry `timestamp` instead of
- * `checkedAt`.
+ * entry, if it had one.
  *
- * @param {Exercise & { detailData?: any }} record
+ * @param {Exercise & { detailData?: DetailData | LegacyUnavailableMarker }} record
  * @returns {{ exercise: Exercise, entry: DetailsEntry | null }}
  */
 export function splitDetailData(record) {
   const { detailData, ...exercise } = record;
   if (!detailData) return { exercise, entry: null };
-  /** @type {DetailsEntry} */
-  const entry = detailData.unavailable
-    ? { id: exercise.id, unavailable: true, checkedAt: detailData.checkedAt ?? detailData.timestamp ?? 0 }
-    : { id: exercise.id, detail: detailData };
-  return { exercise, entry };
+  if ('unavailable' in detailData) {
+    const checkedAt = detailData.checkedAt ?? detailData.timestamp ?? 0;
+    return { exercise, entry: { id: exercise.id, unavailable: true, checkedAt } };
+  }
+  return { exercise, entry: { id: exercise.id, detail: detailData } };
 }
 
 /**
