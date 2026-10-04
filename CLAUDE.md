@@ -81,7 +81,7 @@ npm test                # node --test 'test/**/*.test.js'
 ```
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
-The tests cover pure logic only (import converters, overlap, exercise identity, intake, device map and import toast, shoe totals, the default shoe rule, detail data loading, the detail view's current-run ticket,
+The tests cover pure logic only (import converters, overlap, exercise identity, intake, device map and import toast, shoe totals, the default shoe rule, detail data loading, the detail view's current-run ticket, the detail chart series,
 heart rate sensor classifier, formatters, running sports, HTML escaping), the transaction consumer and `syncFromPolar()` against a fake `request`, plus the exercise cache against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
@@ -131,6 +131,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `public/js/utils/overlap.js` — `markOverlaps(imported, existing)`: marks the phone recording (Polar Beat, or no device) as overlap when a watch recording started within 5 minutes and overlaps in time, both within an import batch and against stored exercises. Pure; called only by intake
 - `public/js/services/detailData.js` — One function, `load(exerciseId, { force })`: reads the `details` store, else fetches TCX (GPX only when there is no TCX), parses and stores it. Concurrent loads of one id share a fetch; `force` (the retry button) ignores the unavailable marker. Never touches the `exercises` store. `forget(id)` removes an exercise's entry once any load of it in flight has finished; deleting from the detail view calls it. `createDetailLoader()` takes the store and fetchers and returns both, so Node tests inject them
 - `public/js/utils/currentView.js` — `createCurrentView()`: the ticket the detail view takes on each opening. `runDetail.js` checks it after every await, so a load (initial or retry) or Leaflet arriving for another run, or after the view closed, draws nothing
+- `public/js/utils/chartSeries.js` — The detail chart's numbers, no DOM: `buildChartSeries(detail) → ChartSeries | null` turns trackpoints into about 400 samples (pace derived over ±4 trackpoints when `<Speed>` is missing, rolling averages, a pace gap below 1 m/s, capped at 15 min/km; the last trackpoint is always kept) with each metric's range, `null` when the metric is absent. No trackpoints (GPX-only detail data) gives `null`. Also `axisBounds`, `kmTickStep` and the scrub cursor's `nearestSample(series, d)`. `runDetail.js` draws from it
 - `public/js/utils/tcxParser.js` — Parses TCX XML into laps, trackpoints (HR, speed, distance), route coordinates
 - `public/js/utils/gpxParser.js` — Parses GPX XML into route coordinates
 - `public/js/views/runDetail.js` — Full-screen detail overlay with HR/pace chart, laps table, and Leaflet map
