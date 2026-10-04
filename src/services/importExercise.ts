@@ -41,6 +41,17 @@ export const diskImportStore: ImportStore = {
   writeTcx: (exerciseId, xml) => writeXmlCache('tcx', exerciseId, xml),
 };
 
+/** The exercise and the TCX to store for it. */
+function convert(source: ImportSource): { exercise: Exercise; tcx: string } {
+  switch (source.kind) {
+    case 'tcx':
+      // A TCX without <Id> is stored with a null start time, as it always was
+      return { exercise: extractTcxMetadata(source.xml) as Exercise, tcx: source.xml };
+    case 'json':
+      return { exercise: polarJsonToExercise(source.session), tcx: polarJsonToTcx(source.session) };
+  }
+}
+
 /**
  * Import one exercise from a TCX or a Polar data export session.
  *
@@ -51,11 +62,7 @@ export const diskImportStore: ImportStore = {
  * the permanent record of an exercise deleted earlier.
  */
 export async function importExercise(source: ImportSource, store: ImportStore): Promise<ImportResult> {
-  const { exercise, tcx } = source.kind === 'tcx'
-    // A TCX without <Id> is stored with a null start time, as it always was
-    ? { exercise: extractTcxMetadata(source.xml) as Exercise, tcx: source.xml }
-    : { exercise: polarJsonToExercise(source.session), tcx: polarJsonToTcx(source.session) };
-
+  const { exercise, tcx } = convert(source);
   const stored = await store.findExercise(exercise.id);
   if (stored) return { status: 'duplicate', exercise: stored };
 
