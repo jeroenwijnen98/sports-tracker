@@ -130,7 +130,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `public/js/utils/` — Formatters for distance, pace, duration, dates
 - `public/js/utils/sports.js` — `RUNNING_SPORTS`, their labels, `isRunningSport(exercise)` and the `isRunningSportName(sport)` type guard: the one running sport list, also imported by `src/services/importConverters.ts`
 - `public/js/utils/html.js` — `escapeHtml()`, the one escaper for user- or file-controlled strings (shoe name/brand, device) put into markup
-- `public/js/utils/identity.js` — `sameExercise(a, b)`: exercise identity as `CONTEXT.md` defines it. Start and duration within 5 s, starts compared as instants (Polar `start-time` minus `start-time-utc-offset`, a TCX `<Id>` in UTC) or, when one side has no offset (a Polar data export), as local times. Never two Polar-synced exercises, never a Polar Beat against another named device. Pure; called only by intake
+- `public/js/utils/identity.js` — `sameExercise(a, b)`: exercise identity as `GLOSSARY.md` defines it. Start and duration within 5 s, starts compared as instants (Polar `start-time` minus `start-time-utc-offset`, a TCX `<Id>` in UTC) or, when one side has no offset (a Polar data export), as local times. Never two Polar-synced exercises, never a Polar Beat against another named device. Pure; called only by intake
 - `public/js/utils/overlap.js` — `markOverlaps(imported, existing)`: marks the phone recording (Polar Beat, or no device) as overlap when a watch recording started within 5 minutes and overlaps in time, both within an import batch and against stored exercises. Pure; called only by intake
 - `public/js/services/detailData.js` — One function, `load(exerciseId, { force })`: reads the `details` store, else fetches TCX (GPX only when there is no TCX), parses and stores it. Concurrent loads of one id share a fetch; `force` (the retry button) ignores the unavailable marker. Never touches the `exercises` store. `forget(id)` removes an exercise's entry once any load of it in flight has finished; deleting from the detail view calls it. `createDetailLoader()` takes the store and fetchers and returns both, so Node tests inject them
 - `public/js/utils/currentView.js` — `createCurrentView()`: the ticket the detail view takes on each opening. `runDetail.js` checks it after every await, so a load (initial or retry) or Leaflet arriving for another run, or after the view closed, draws nothing
@@ -194,4 +194,4 @@ The five canonical labels, used verbatim: `needs-triage`, `needs-info`, `ready-f
 
 ### Domain docs
 
-Single-context: `CONTEXT.md` and `docs/adr/` at the repo root (`docs/adr/` does not exist yet; created lazily). See `docs/agents/domain.md`.
+Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root (`docs/adr/` does not exist yet; created lazily). See `docs/agents/domain.md`.

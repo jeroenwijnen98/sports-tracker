@@ -1,6 +1,6 @@
 /**
  * Shared domain types, one source for the server and the browser. The names
- * follow CONTEXT.md. Types only: Node strips this file to nothing, and
+ * follow GLOSSARY.md. Types only: Node strips this file to nothing, and
  * frontend files reference it through a JSDoc `@typedef` of
  * `import('../../types/domain.ts').Exercise`, so the browser never loads it.
  */

@@ -1,7 +1,7 @@
 # Coding Standards
 
 The reviewer agent loads this file via @.sandcastle/CODING_STANDARDS.md. It
-supplements `CLAUDE.md` and `CONTEXT.md` in the repo root; where they differ,
+supplements `CLAUDE.md` and `GLOSSARY.md` in the repo root; where they differ,
 those win.
 
 ## Style
@@ -24,7 +24,7 @@ those win.
 
 ## Domain language
 
-`CONTEXT.md` is the domain model. Names in code follow it (exercise, lap,
+`GLOSSARY.md` is the domain model. Names in code follow it (exercise, lap,
 trackpoint, route, detail data, heart rate sensor, smoothness) and avoid the
 words it lists under _Avoid_.
 

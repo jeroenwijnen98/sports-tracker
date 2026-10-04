@@ -10,7 +10,7 @@ Work on branch {{BRANCH}}. Make commits and run the checks below.
 
 # CONTEXT
 
-Read `CLAUDE.md` and `CONTEXT.md` first. `CONTEXT.md` is the domain model, and its
+Read `CLAUDE.md` and `GLOSSARY.md` first. `GLOSSARY.md` is the domain model, and its
 vocabulary (exercise, running sport, overlap, detail data, lap, trackpoint, route,
 heart rate sensor, smoothness) is the vocabulary the code must use.
 
