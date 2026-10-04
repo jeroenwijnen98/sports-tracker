@@ -75,7 +75,7 @@ test('downsampling a long series keeps the last distance', () => {
   assert.equal(series.samples[series.samples.length - 1].d, points[points.length - 1].distance);
 });
 
-test('heart-rate-only detail data has no pace and null pace ranges', () => {
+test('heart-rate-only detail data has no pace and a null pace range', () => {
   const points = trackpoints(30, { speedAt: () => 0, withSpeed: false });
   const series = buildChartSeries(detail(points));
   assert.ok(series);

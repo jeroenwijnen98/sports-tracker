@@ -165,7 +165,10 @@ export function axisBounds([min, max]) {
  * @returns {number}
  */
 export function kmTickStep(kmMax) {
-  return kmMax <= 3 ? 0.5 : kmMax <= 8 ? 1 : kmMax <= 20 ? 2 : 5;
+  if (kmMax <= 3) return 0.5;
+  if (kmMax <= 8) return 1;
+  if (kmMax <= 20) return 2;
+  return 5;
 }
 
 /**
