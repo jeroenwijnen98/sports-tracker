@@ -1,7 +1,5 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## What This Is
 
 A personal running dashboard that syncs data from the Polar AccessLink API, stores it in IndexedDB for offline use, and displays it with a Nike Run Club-inspired dark UI. Runs locally on localhost:3000. All user-facing text is in Dutch.
@@ -33,10 +31,9 @@ after changing the logo, then `./install-app.command`.
 
 `run.sh` is called from productivity-hub's sleepwatcher wake script and runs
 `scripts/sync.ts`, appending to `logs/sync.log`. It derives its own project
-directory from the script's location instead of hardcoding one — an earlier
-hardcoded path survived the move to `~/Developer` and failed silently on every
-wake for months. It also probes for node in the known install locations, because
-sleepwatcher hands it a bare PATH.
+directory from the script's location, so it keeps working if the repo moves (a
+failure there is silent). It also probes for node in the known install
+locations, because sleepwatcher hands it a bare PATH.
 
 There are no build steps and no linter; the checks are `npm run typecheck`
 (strict, the whole repo) and `npm test`. The app requires a `.env` file with
@@ -142,7 +139,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 
 - **Sport filter:** Only `RUNNING`, `TRAIL_RUNNING`, `TREADMILL_RUNNING`, `ULTRARUNNING_RUNNING` are synced/shown — defined once in `public/js/utils/sports.js`
 - **Shoe km tracking:** a shoe's total is initial km plus the distance of every assigned exercise that is not an overlap. It is not stored: `shoeTotals(shoes, exercises)` in `public/js/shoes.js` derives it each time the shoes tab renders, so deleting an exercise or changing its overlap state needs no extra call. Older shoe records may still carry a stale `totalKm` field; nothing reads it
-- **Polar API constraint:** The transaction flow (POST/GET/PUT) means each exercise can only be fetched once — local IndexedDB storage is the permanent record
+- **Polar API constraint:** once a transaction is committed (PUT), its exercises and their TCX/GPX are gone from that channel — the server-side cache is the permanent record (see "An uncommitted exercise transaction")
 - **Eager TCX/GPX caching:** `consumeTransaction()` fetches TCX and GPX and saves them to disk, with the exercise JSON, during the sync transaction (before commit), because they become permanently inaccessible after commit. The server-side cache in `src/data/tcx/` and `src/data/gpx/` is the permanent record for detail data
 - **Dual exercise sources:** Sync combines Pull Notifications (transaction flow) with the Training Data API (`/v3/exercises`) and deduplicates by ID. The `/api/exercises/:id/tcx` and `/gpx` routes serve from server-side cache first, then fall back to the Training Data API
 - **Token never expires:** Single OAuth flow, token persisted server-side as JSON file
@@ -154,7 +151,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 The Polar API has two separate data access paths that behave very differently:
 
 - **Pull Notifications (transaction flow):** `POST /v3/users/{userId}/exercise-transactions` → `GET list` → `GET each` → `PUT commit`. Owned by `consumeTransaction()`. This is one-time consumption — once committed, exercises and their TCX/GPX are gone forever. TCX/GPX must be fetched during the transaction using `{exerciseUrl}/tcx` (the full transaction URL, NOT `/v3/exercises/{id}/tcx`). After de-registration and re-registration, only exercises recorded after the new registration date appear
-- **Training Data API:** `GET /v3/exercises`, `GET /v3/exercises/{id}/tcx`. Separate system that provides persistent access to exercises. Not one-time consumption — data can be re-fetched. May take time to populate after user registration. Requires the user's Polar watch to sync via the Polar Flow app first
+- **Training Data API:** `GET /v3/exercises`, `GET /v3/exercises/{id}/tcx`. Separate system, not one-time consumption: exercises and their TCX/GPX can be re-fetched for 30 days after upload to Flow. May take time to populate after user registration. Requires the user's Polar watch to sync via the Polar Flow app first
 - **De-registering a user** (`DELETE /v3/users/{userId}`) resets the Pull Notifications state but does NOT bring back historically consumed exercises through that channel. Use this as a last resort
 - **User ID** is returned in the OAuth token response as `x_user_id` and persisted in `token.json`
 
