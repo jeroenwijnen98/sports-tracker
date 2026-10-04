@@ -2,6 +2,7 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { DATA_DIR } from '../config.ts';
 import { recordHrSensor } from './hrSensor.ts';
+import type { HeartRateSensor } from '../../types/domain.ts';
 
 /** The two kinds of exercise XML kept on disk, each in its own directory. */
 export type XmlType = 'tcx' | 'gpx';
@@ -30,17 +31,20 @@ export async function readXmlCache(type: XmlType, exerciseId: string): Promise<s
  * four different call sites, so the sensor classification hangs off this choke
  * point rather than off each of them. It is best effort: a failure here must
  * never cost us the cached XML, which is the permanent record.
+ *
+ * Returns the heart rate sensor just classified, or null when there is none
+ * (a GPX, too little heart rate data, or a failed classification).
  */
-export async function writeXmlCache(type: XmlType, exerciseId: string, xml: string): Promise<void> {
+export async function writeXmlCache(type: XmlType, exerciseId: string, xml: string): Promise<HeartRateSensor | null> {
   const dir = join(DATA_DIR, type);
   await mkdir(dir, { recursive: true });
   await writeFile(join(dir, `${exerciseId}.xml`), xml);
 
-  if (type === 'tcx') {
-    try {
-      await recordHrSensor(exerciseId, xml);
-    } catch (err) {
-      console.log(`[sensors] Could not classify ${exerciseId}:`, (err as Error).message);
-    }
+  if (type !== 'tcx') return null;
+  try {
+    return await recordHrSensor(exerciseId, xml);
+  } catch (err) {
+    console.log(`[sensors] Could not classify ${exerciseId}:`, (err as Error).message);
+    return null;
   }
 }

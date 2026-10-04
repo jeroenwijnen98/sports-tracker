@@ -35,6 +35,16 @@ export async function appendToCache(newExercises: Exercise[]): Promise<number> {
 }
 
 /**
+ * Take an exercise just appended back out of the cache, without recording it
+ * as deleted: for an import whose TCX could not be written after all.
+ */
+export async function revertAppend(id: string): Promise<void> {
+  const existing = await readCache();
+  const remaining = existing.filter((e) => e.id !== id);
+  if (remaining.length < existing.length) await writeCache(remaining);
+}
+
+/**
  * Remove an exercise from the cache and remember its id as deleted, so a sync
  * does not bring it back from the Training Data API. Its TCX/GPX and heart
  * rate sensor entry are kept: they cannot be fetched again.

@@ -1,14 +1,15 @@
 import { Router } from 'express';
+import type { Response } from 'express';
 import express from 'express';
 import { tokenCheck } from '../middleware/tokenCheck.ts';
 import { polarRequest, withToken, XML_ACCEPT } from '../services/polarApi.ts';
 import { syncFromPolar } from '../services/polarSync.ts';
-import { readCache, appendToCache, removeFromCache } from '../services/exerciseCache.ts';
+import { readCache, removeFromCache } from '../services/exerciseCache.ts';
 import { readXmlCache, writeXmlCache, isXmlType } from '../services/xmlCache.ts';
 import { withHrSensor } from '../services/hrSensor.ts';
-import { polarJsonToTcx, polarJsonToExercise, extractTcxMetadata } from '../services/importConverters.ts';
+import { importExercise, diskImportStore } from '../services/importExercise.ts';
+import type { ImportSource } from '../services/importExercise.ts';
 import type { ExportSession } from '../services/importConverters.ts';
-import type { Exercise } from '../../types/domain.ts';
 
 const router = Router();
 
@@ -64,61 +65,40 @@ router.get('/exercises/:id/:type', async (req, res, next) => {
   res.status(404).json({ error: `${type.toUpperCase()} data niet beschikbaar.` });
 });
 
-router.post('/exercises/import', express.text({ type: 'text/xml', limit: '5mb' }), async (req, res) => {
+/**
+ * Hand an import to `importExercise()` and map its result to HTTP: 200 with
+ * the new exercise, 409 with the stored one, 500 on a thrown error.
+ */
+async function sendImport(res: Response, source: ImportSource): Promise<void> {
   try {
-    const xml: unknown = req.body;
-    if (!xml || typeof xml !== 'string') {
-      return res.status(400).json({ error: 'Geen TCX data ontvangen' });
+    const { status, exercise } = await importExercise(source, diskImportStore);
+    if (status === 'duplicate') {
+      res.status(409).json({ error: 'Deze activiteit is al geïmporteerd', exercise });
+      return;
     }
-
-    const exercise = extractTcxMetadata(xml);
-
-    // Check if already imported
-    const cached = await readCache();
-    if (cached.some((e) => e.id === exercise.id)) {
-      return res.status(409).json({ error: 'Deze activiteit is al geïmporteerd', exercise });
-    }
-
-    // Save TCX to xml cache and exercise to exercise cache
-    await writeXmlCache('tcx', exercise.id, xml);
-    // A TCX without <Id> is stored with a null start time, as it always was
-    await appendToCache([exercise as Exercise]);
-
-    console.log(`[Import] Imported TCX exercise ${exercise.id} (${exercise['start-time']})`);
+    console.log(`[Import] Imported ${source.kind.toUpperCase()} exercise ${exercise.id} (${exercise['start-time']}, ${exercise['detailed-sport-info']})`);
     res.json(exercise);
   } catch (err) {
-    console.error('TCX import error:', (err as Error).message);
+    console.error(`${source.kind.toUpperCase()} import error:`, (err as Error).message);
     res.status(500).json({ error: 'Import mislukt' });
   }
+}
+
+router.post('/exercises/import', express.text({ type: 'text/xml', limit: '5mb' }), async (req, res) => {
+  const xml: unknown = req.body;
+  if (!xml || typeof xml !== 'string') {
+    return res.status(400).json({ error: 'Geen TCX data ontvangen' });
+  }
+  await sendImport(res, { kind: 'tcx', xml });
 });
 
 // Polar JSON data export import
 router.post('/exercises/import-json', express.json({ limit: '10mb' }), async (req, res) => {
-  try {
-    const session: ExportSession | undefined = req.body;
-    if (!session?.exercises?.length) {
-      return res.status(400).json({ error: 'Geen training sessie gevonden in JSON' });
-    }
-
-    // Convert to TCX for detail data (chart, laps, map)
-    const tcxXml = polarJsonToTcx(session);
-    const exercise = polarJsonToExercise(session);
-
-    // Check for duplicate
-    const cached = await readCache();
-    if (cached.some((e) => e.id === exercise.id)) {
-      return res.status(409).json({ error: 'Deze activiteit is al geïmporteerd', exercise: { id: exercise.id } });
-    }
-
-    await writeXmlCache('tcx', exercise.id, tcxXml);
-    await appendToCache([exercise]);
-
-    console.log(`[Import] Imported JSON exercise ${exercise.id} (${exercise['start-time']}, ${exercise['detailed-sport-info']})`);
-    res.json(exercise);
-  } catch (err) {
-    console.error('JSON import error:', (err as Error).message);
-    res.status(500).json({ error: 'Import mislukt' });
+  const session: ExportSession | undefined = req.body;
+  if (!session?.exercises?.length) {
+    return res.status(400).json({ error: 'Geen training sessie gevonden in JSON' });
   }
+  await sendImport(res, { kind: 'json', session });
 });
 
 export default router;

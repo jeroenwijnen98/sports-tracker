@@ -38,7 +38,9 @@ export const diskStore: TransactionStore = {
   async hasXml(type, exerciseId) {
     return (await readXmlCache(type, exerciseId)) !== null;
   },
-  writeXml: writeXmlCache,
+  async writeXml(type, exerciseId, xml) {
+    await writeXmlCache(type, exerciseId, xml);
+  },
 };
 
 /**
