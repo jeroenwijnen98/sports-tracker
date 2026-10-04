@@ -8,7 +8,7 @@
 # bundle keeps working if it is moved to /Applications.
 APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 if [ ! -f "$APP_DIR/server.ts" ]; then
-  APP_DIR="/Users/marcwijnen/Developer/sports-tracker"
+  APP_DIR="/Users/jeroen/Developer/sports-tracker"
 fi
 cd "$APP_DIR" || exit 1
 
