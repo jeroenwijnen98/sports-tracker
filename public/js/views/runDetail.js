@@ -8,12 +8,14 @@ import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODu
 import { formatDate, formatTime } from '../utils/date.js';
 import { escapeHtml } from '../utils/html.js';
 import { createCurrentView } from '../utils/currentView.js';
+import { buildChartSeries, axisBounds, kmTickStep, nearestSample } from '../utils/chartSeries.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
 /** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
 /** @typedef {import('../../../types/domain.ts').DetailData} DetailData */
-/** @typedef {import('../../../types/domain.ts').Trackpoint} Trackpoint */
+/** @typedef {import('../utils/chartSeries.js').ChartSeries} ChartSeries */
+/** @typedef {import('../utils/chartSeries.js').ChartSample} ChartSample */
 /** @typedef {import('../utils/currentView.js').ViewTicket} ViewTicket */
 
 /**
@@ -184,29 +186,6 @@ const HR_COLOR = '#FF4D6D';
 
 /** @typedef {'pace' | 'hr' | 'both'} ChartMode */
 
-/**
- * A trackpoint reduced to what the chart needs: seconds since the start and,
- * where known, speed in m/s.
- * @typedef {{ d: number, t: number, hr: number | null, speed: number | null }} ChartPoint
- */
-
-/**
- * One plotted sample: cumulative metres, heart rate and pace in min/km.
- * @typedef {{ d: number, hr: number | null, pace: number | null }} ChartSample
- */
-
-/**
- * @typedef {object} ChartSeries
- * @property {ChartSample[]} samples
- * @property {number} maxD Metres at the last sample.
- * @property {boolean} hasPace
- * @property {boolean} hasHr
- * @property {number} paceMin
- * @property {number} paceMax
- * @property {number} hrMin
- * @property {number} hrMax
- */
-
 /** @typedef {{ top: number, right: number, bottom: number, left: number }} Padding */
 
 /** @typedef {(value: number) => number} Scale */
@@ -278,96 +257,12 @@ function renderChart(detail) {
 }
 
 /**
- * Flatten trackpoints into { d, pace, hr } samples.
- * Polar doesn't always record <Speed>, so pace falls back to distance/time deltas.
- *
- * @param {DetailData} detail
- * @returns {ChartSeries | null}
- */
-function buildChartSeries(detail) {
-  /** @type {ChartPoint[]} */
-  let points = (detail.allTrackpoints || [])
-    .filter(
-      /** @returns {tp is Trackpoint & { distance: number, time: string }} */
-      (tp) => tp.distance !== null && !!tp.time
-    )
-    .map((tp, i, arr) => ({
-      d: tp.distance,
-      t: (Date.parse(tp.time) - Date.parse(arr[0].time)) / 1000,
-      hr: tp.heartRate,
-      speed: tp.speed !== null && tp.speed > 0 ? tp.speed : null,
-    }));
-
-  if (points.length < 2) return null;
-
-  const window = 4;
-  for (let i = 0; i < points.length; i++) {
-    if (points[i].speed !== null) continue;
-    const a = points[Math.max(0, i - window)];
-    const b = points[Math.min(points.length - 1, i + window)];
-    points[i].speed = b.t > a.t ? (b.d - a.d) / (b.t - a.t) : null;
-  }
-
-  // Downsample to ~400 samples, then roll a moving average over both metrics.
-  if (points.length > 400) {
-    const step = points.length / 400;
-    points = Array.from({ length: 400 }, (_, i) => points[Math.floor(i * step)]);
-  }
-  points = rollingAverage(points, 'speed', 6);
-  points = rollingAverage(points, 'hr', 4);
-
-  const samples = points.map((p) => ({
-    d: p.d,
-    hr: p.hr,
-    // min/km; standing still (< 1 m/s) leaves a gap instead of a spike
-    pace: p.speed !== null && p.speed > 1 ? Math.min(1000 / 60 / p.speed, 15) : null,
-  }));
-
-  const paces = samples.map((p) => p.pace).filter((v) => v !== null);
-  const hrs = samples.map((p) => p.hr).filter(/** @returns {v is number} */ (v) => !!v);
-
-  return {
-    samples,
-    maxD: samples[samples.length - 1].d || 1,
-    hasPace: paces.length > 0,
-    hasHr: hrs.length > 0,
-    paceMin: Math.min(...paces),
-    paceMax: Math.max(...paces),
-    hrMin: Math.min(...hrs),
-    hrMax: Math.max(...hrs),
-  };
-}
-
-/**
- * @param {ChartPoint[]} points
- * @param {'speed' | 'hr'} key
- * @param {number} window Samples on either side.
- * @returns {ChartPoint[]}
- */
-function rollingAverage(points, key, window) {
-  return points.map((p, i) => {
-    let sum = 0;
-    let count = 0;
-    for (let j = Math.max(0, i - window); j <= Math.min(points.length - 1, i + window); j++) {
-      const value = points[j][key];
-      if (value != null) {
-        sum += value;
-        count++;
-      }
-    }
-    return { ...p, [key]: count ? sum / count : null };
-  });
-}
-
-/**
  * @typedef {object} ChartGeometry
  * @property {Scale} xScale
- * @property {Scale} paceScale
- * @property {Scale} hrScale
+ * @property {Scale | null} paceScale Null when pace is not shown.
+ * @property {Scale | null} hrScale Null when heart rate is not shown.
  * @property {Padding} pad
  * @property {number} plotH
- * @property {boolean} showPace
- * @property {boolean} showHr
  */
 
 /**
@@ -385,46 +280,51 @@ function drawChart() {
   if (legend) legend.style.display = chartMode === 'both' ? '' : 'none';
 
   const { ctx, w, h } = chartContext(canvas);
-  const showPace = chartMode === 'pace' || chartMode === 'both';
-  const showHr = chartMode === 'hr' || chartMode === 'both';
+  // A metric's range is null when the run has none, so bounds are only
+  // computed for the metrics on screen.
+  const paceRange = chartMode === 'pace' || chartMode === 'both' ? series.paceRange : null;
+  const hrRange = chartMode === 'hr' || chartMode === 'both' ? series.hrRange : null;
   /** @type {Padding} */
   const pad = { top: 16, right: chartMode === 'both' ? 42 : 12, bottom: 22, left: 42 };
   const plotW = w - pad.left - pad.right;
   const plotH = h - pad.top - pad.bottom;
 
-  const [paceLo, paceHi] = axisBounds(series.paceMin, series.paceMax);
-  const [hrLo, hrHi] = axisBounds(series.hrMin, series.hrMax);
-
   /** @type {Scale} */
   const xScale = (d) => pad.left + (d / series.maxD) * plotW;
-  // Pace is inverted: a lower min/km is faster, so it sits higher on the chart.
-  /** @type {Scale} */
-  const paceScale = (v) => pad.top + ((v - paceLo) / (paceHi - paceLo)) * plotH;
-  /** @type {Scale} */
-  const hrScale = (v) => pad.top + plotH - ((v - hrLo) / (hrHi - hrLo)) * plotH;
 
   drawGrid(ctx, w, pad, plotH);
 
-  if (showPace) {
+  /** @type {Scale | null} */
+  let paceScale = null;
+  if (paceRange) {
+    const [paceLo, paceHi] = axisBounds(paceRange);
+    // Pace is inverted: a lower min/km is faster, so it sits higher on the chart.
+    paceScale = (v) => pad.top + ((v - paceLo) / (paceHi - paceLo)) * plotH;
     drawAxisLabels(ctx, pad, plotH, 'left', (i) => formatPaceValue(paceLo + ((paceHi - paceLo) / 4) * i), PACE_COLOR);
-  } else {
-    drawAxisLabels(ctx, pad, plotH, 'left', (i) => Math.round(hrHi - ((hrHi - hrLo) / 4) * i), '#666666');
   }
-  if (chartMode === 'both') {
-    drawAxisLabels(ctx, pad, plotH, 'right', (i) => Math.round(hrHi - ((hrHi - hrLo) / 4) * i), HR_COLOR, plotW);
+
+  /** @type {Scale | null} */
+  let hrScale = null;
+  if (hrRange) {
+    const [hrLo, hrHi] = axisBounds(hrRange);
+    hrScale = (v) => pad.top + plotH - ((v - hrLo) / (hrHi - hrLo)) * plotH;
+    /** @param {number} i */
+    const hrAt = (i) => Math.round(hrHi - ((hrHi - hrLo) / 4) * i);
+    if (paceRange) drawAxisLabels(ctx, pad, plotH, 'right', hrAt, HR_COLOR, plotW);
+    else drawAxisLabels(ctx, pad, plotH, 'left', hrAt, '#666666');
   }
 
   drawDistanceLabels(ctx, h, pad, xScale, series.maxD);
 
   const solo = chartMode !== 'both';
-  if (showHr) {
+  if (hrScale) {
     drawMetric(ctx, series.samples, xScale, hrScale, 'hr', HR_COLOR, solo ? 2 : 1.75, solo ? pad.top + plotH : null, pad.top);
   }
-  if (showPace) {
+  if (paceScale) {
     drawMetric(ctx, series.samples, xScale, paceScale, 'pace', PACE_COLOR, solo ? 2 : 2.25, solo ? pad.top + plotH : null, pad.top);
   }
 
-  chartGeometry = { xScale, paceScale, hrScale, pad, plotH, showPace, showHr };
+  chartGeometry = { xScale, paceScale, hrScale, pad, plotH };
 }
 
 /**
@@ -440,16 +340,6 @@ function chartContext(canvas) {
   ctx.scale(dpr, dpr);
   ctx.clearRect(0, 0, rect.width, rect.height);
   return { ctx, w: rect.width, h: rect.height };
-}
-
-/**
- * @param {number} min
- * @param {number} max
- * @returns {[number, number]}
- */
-function axisBounds(min, max) {
-  const range = max - min || 1;
-  return [min - range * 0.08, max + range * 0.08];
 }
 
 /**
@@ -503,7 +393,7 @@ function drawDistanceLabels(ctx, h, pad, xScale, maxD) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   const kmMax = maxD / 1000;
-  const step = kmMax <= 3 ? 0.5 : kmMax <= 8 ? 1 : kmMax <= 20 ? 2 : 5;
+  const step = kmTickStep(kmMax);
   for (let km = 0; km <= kmMax + 1e-6; km += step) {
     ctx.fillText(kmMax <= 3 ? km.toFixed(1) : String(km), xScale(km * 1000), h - pad.bottom + 5);
   }
@@ -615,14 +505,10 @@ function drawChartCursor(frac) {
   const canvas = /** @type {HTMLCanvasElement | null} */ (document.getElementById('run-detail-chart-cursor'));
   if (!canvas || !chartGeometry || !chartSeries) return;
 
-  const target = frac * chartSeries.maxD;
-  let sample = chartSeries.samples[0];
-  for (const candidate of chartSeries.samples) {
-    if (Math.abs(candidate.d - target) < Math.abs(sample.d - target)) sample = candidate;
-  }
+  const sample = nearestSample(chartSeries, frac * chartSeries.maxD);
 
   const { ctx } = chartContext(canvas);
-  const { xScale, paceScale, hrScale, pad, plotH, showPace, showHr } = chartGeometry;
+  const { xScale, paceScale, hrScale, pad, plotH } = chartGeometry;
   const x = xScale(sample.d);
 
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
@@ -634,8 +520,8 @@ function drawChartCursor(frac) {
 
   /** @type {[y: number, color: string][]} */
   const dots = [];
-  if (showPace && sample.pace !== null) dots.push([paceScale(sample.pace), PACE_COLOR]);
-  if (showHr && sample.hr) dots.push([hrScale(sample.hr), HR_COLOR]);
+  if (paceScale && sample.pace !== null) dots.push([paceScale(sample.pace), PACE_COLOR]);
+  if (hrScale && sample.hr) dots.push([hrScale(sample.hr), HR_COLOR]);
   for (const [y, color] of dots) {
     ctx.beginPath();
     ctx.arc(x, y, 4, 0, Math.PI * 2);
@@ -644,8 +530,8 @@ function drawChartCursor(frac) {
   }
 
   const parts = [`${(sample.d / 1000).toFixed(2)} km`];
-  if (showPace) parts.push(sample.pace !== null ? `${formatPaceValue(sample.pace)} /km` : '--:-- /km');
-  if (showHr) parts.push(sample.hr ? `${Math.round(sample.hr)} bpm` : '-- bpm');
+  if (paceScale) parts.push(sample.pace !== null ? `${formatPaceValue(sample.pace)} /km` : '--:-- /km');
+  if (hrScale) parts.push(sample.hr ? `${Math.round(sample.hr)} bpm` : '-- bpm');
   const readout = document.getElementById('chart-readout');
   if (readout) readout.textContent = parts.join(' · ');
 }
