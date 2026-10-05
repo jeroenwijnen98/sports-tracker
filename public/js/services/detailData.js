@@ -20,8 +20,10 @@ import { parseGpx } from '../utils/gpxParser.js';
 /**
  * @typedef {object} DetailLoaderDeps
  * @property {DetailsStore} store
- * @property {(id: string) => Promise<DetailData | null>} fetchTcx Fetched and parsed, or null when there is none.
- * @property {(id: string) => Promise<Pick<DetailData, 'route' | 'hasGps'> | null>} fetchGpx Fetched and parsed, or null when there is none.
+ * @property {(id: string) => Promise<DetailData | null>} fetchTcx Fetched
+ *   and parsed, or null when there is none.
+ * @property {(id: string) => Promise<Pick<DetailData, 'route' | 'hasGps'> | null>} fetchGpx
+ *   Fetched and parsed, or null when there is none.
  * @property {() => number} [now]
  */
 

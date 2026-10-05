@@ -123,7 +123,8 @@ export function parseTcx(xmlString) {
 
 /**
  * @param {Element | undefined} el
- * @returns {number | null} The element's number, or null when missing or not a number.
+ * @returns {number | null} The element's number, or null when missing or not
+ *   a number.
  */
 function floatVal(el) {
   if (!el) return null;

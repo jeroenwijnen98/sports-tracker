@@ -13,7 +13,10 @@ export type ImportSource =
 export interface ImportResult {
   /** `duplicate`: an exercise with this id is already stored, and nothing was written. */
   status: 'imported' | 'duplicate';
-  /** The imported exercise, or for a duplicate the stored one, with its heart rate sensor when known. */
+  /**
+   * The imported exercise, or for a duplicate the stored one, with its heart
+   * rate sensor when known.
+   */
   exercise: Exercise;
 }
 

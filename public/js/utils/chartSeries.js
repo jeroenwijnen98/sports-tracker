@@ -41,13 +41,15 @@ const MAX_PACE = 15;
  * @property {boolean} hasPace
  * @property {boolean} hasHr
  * @property {Range | null} paceRange Min/km; null when no sample has a pace.
- * @property {Range | null} hrRange Beats per minute; null when no sample has a heart rate.
+ * @property {Range | null} hrRange Beats per minute; null when no sample has a
+ *   heart rate.
  */
 
 /**
  * Flatten trackpoints into { d, pace, hr } samples. Null when there are fewer
- * than two trackpoints with a time and distance (GPX-only detail data has none).
- * Polar doesn't always record <Speed>, so pace falls back to distance/time deltas.
+ * than two trackpoints with a time and distance (GPX-only detail data has
+ * none). Polar doesn't always record <Speed>, so pace falls back to
+ * distance/time deltas.
  *
  * @param {DetailData} detail
  * @returns {ChartSeries | null}

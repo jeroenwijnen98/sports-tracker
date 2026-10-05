@@ -5,7 +5,8 @@ const ENTITIES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '
 
 /**
  * Escape a string for markup, in element text or a quoted attribute. Use it on
- * everything the user or an imported file controls: shoe name and brand, device.
+ * everything the user or an imported file controls: shoe name and brand,
+ * device.
  *
  * @param {unknown} str
  * @returns {string}

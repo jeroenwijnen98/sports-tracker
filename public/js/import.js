@@ -5,7 +5,8 @@
 /** @typedef {import('../../types/domain.ts').Exercise} Exercise */
 
 /**
- * The parts of a Polar data export's `products-devices` file used to name devices.
+ * The parts of a Polar data export's `products-devices` file used to name
+ * devices.
  * @typedef {object} ProductsDevices
  * @property {{ deviceId?: string, name?: string }[]} [devices]
  * @property {{ deviceId: string, archived?: string }[]} [archivedDevices]

@@ -45,12 +45,12 @@ export const diskStore: TransactionStore = {
 
 /**
  * Consume one Pull Notifications transaction:
- * 1. POST /users/{userId}/exercise-transactions -> creates it (204: no new data)
+ * 1. POST /users/{userId}/exercise-transactions -> opens it (204: no new data)
  * 2. GET  its resource-uri                      -> lists exercise URLs
  * 3. GET  each exercise URL, then {url}/tcx and, with a route, {url}/gpx,
  *         writing each to `store` as it arrives (XML already cached is not
  *         fetched again)
- * 4. PUT  its resource-uri                      -> commits, and Polar deletes it
+ * 4. PUT  its resource-uri                      -> commits; Polar deletes it
  *
  * Invariant: every exercise in the transaction, with its TCX and GPX, is on
  * disk before the commit, because Polar never hands it out again. When

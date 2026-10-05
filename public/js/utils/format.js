@@ -59,7 +59,8 @@ export function paceParts(secondsPerKm) {
 }
 
 /**
- * Calculate pace (min:sec per km) from duration in seconds and distance in meters.
+ * Calculate pace (min:sec per km) from duration in seconds and distance in
+ * meters.
  *
  * @param {number} durationSeconds
  * @param {number | undefined} distanceMeters

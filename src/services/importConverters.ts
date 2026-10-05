@@ -94,7 +94,8 @@ export function polarJsonToTcx(session: ExportSession): string {
   const startDate = new Date(startTime);
 
   // Build merged trackpoint timeline from all sample types
-  // HR/speed/distance samples share timestamps; route samples have different timestamps
+  // HR/speed/distance samples share timestamps; route samples have different
+  // timestamps
   const hrSamples = ex.samples?.heartRate || [];
   const speedSamples = ex.samples?.speed || [];
   const distSamples = ex.samples?.distance || [];

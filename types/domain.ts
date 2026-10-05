@@ -106,7 +106,8 @@ export interface DetailData {
 
 /**
  * How filtered an exercise's heart rate series looks, in chest strap reference
- * standard deviations. Higher is more wrist-like. Reason with this, not the label.
+ * standard deviations. Higher is more wrist-like. Reason with this, not the
+ * label.
  */
 export type Smoothness = number;
 

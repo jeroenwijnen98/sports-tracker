@@ -406,7 +406,8 @@ function drawDistanceLabels(ctx, h, pad, xScale, maxD) {
 }
 
 /**
- * Draw one metric as a line, splitting on gaps; `areaBase` adds a gradient fill.
+ * Draw one metric as a line, splitting on gaps; `areaBase` adds a gradient
+ * fill.
  * @param {CanvasRenderingContext2D} ctx
  * @param {ChartSample[]} samples
  * @param {Scale} xScale
