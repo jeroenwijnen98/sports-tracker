@@ -22,7 +22,6 @@ Review the code changes on branch `{{BRANCH}}` and improve code clarity, consist
    - Improve readability through clear variable and function names
    - Consolidate related logic
    - Remove unnecessary comments that describe obvious code
-   - Avoid nested ternary operators - prefer switch statements or if/else chains
    - Does `public/` still run in the browser as it is, with no build step or emitted files?
    - Choose clarity over brevity - explicit code is often better than overly compact code
 
