@@ -1,0 +1,3 @@
+#!/bin/sh
+# A merge without conflicts skips pre-commit; this runs the same check.
+exec npm test --silent

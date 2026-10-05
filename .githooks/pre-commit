@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs the test suite before every commit. Bypass once with --no-verify.
+exec npm test --silent
