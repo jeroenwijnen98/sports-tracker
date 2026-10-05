@@ -47,6 +47,18 @@ export function formatDistance(meters) {
 }
 
 /**
+ * The one pace rounding rule: seconds per km rounded to the nearest whole
+ * second, carried into the minutes, so the seconds are never 60.
+ *
+ * @param {number} secondsPerKm
+ * @returns {{ min: number, sec: string }} `sec` padded to two digits.
+ */
+export function paceParts(secondsPerKm) {
+  const total = Math.round(secondsPerKm);
+  return { min: Math.floor(total / 60), sec: String(total % 60).padStart(2, '0') };
+}
+
+/**
  * Calculate pace (min:sec per km) from duration in seconds and distance in meters.
  *
  * @param {number} durationSeconds
@@ -55,10 +67,8 @@ export function formatDistance(meters) {
  */
 export function formatPace(durationSeconds, distanceMeters) {
   if (!distanceMeters || distanceMeters === 0) return '--:--';
-  const paceSeconds = durationSeconds / (distanceMeters / 1000);
-  const min = Math.floor(paceSeconds / 60);
-  const sec = Math.floor(paceSeconds % 60);
-  return `${min}:${String(sec).padStart(2, '0')}`;
+  const { min, sec } = paceParts(durationSeconds / (distanceMeters / 1000));
+  return `${min}:${sec}`;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseISODuration, formatPace, formatDuration } from '../public/js/utils/format.js';
+import { parseISODuration, formatPace, formatDuration, paceParts } from '../public/js/utils/format.js';
 
 test('parseISODuration', () => {
   assert.equal(parseISODuration('PT1H23M45S'), 5025);
@@ -18,6 +18,20 @@ test('formatPace gives min:sec per km', () => {
   assert.equal(formatPace(3600, 10000), '6:00');
   assert.equal(formatPace(600, 0), '--:--');
   assert.equal(formatPace(600, undefined), '--:--');
+});
+
+test('formatPace rounds to the nearest second and carries into the minutes', () => {
+  // 359.7 s/km: rounds up to 6:00, never 5:60
+  assert.equal(formatPace(3597, 10000), '6:00');
+  // 309.4 s/km rounds down, 309.5 rounds up
+  assert.equal(formatPace(1547, 5000), '5:09');
+  assert.equal(formatPace(1547.5, 5000), '5:10');
+});
+
+test('paceParts never gives 60 seconds', () => {
+  assert.deepEqual(paceParts(359.5), { min: 6, sec: '00' });
+  assert.deepEqual(paceParts(359.4), { min: 5, sec: '59' });
+  assert.deepEqual(paceParts(65), { min: 1, sec: '05' });
 });
 
 test('formatDuration', () => {
