@@ -130,7 +130,7 @@ function movingMask({ hr, distance, cadence }: HrSeries): number[] {
   } else if (withCadence > 0.8) {
     moving = cadence.map((c) => c !== null && c >= 140);
   } else {
-    moving = new Array(n).fill(true);
+    moving = Array.from({ length: n }, () => true);
   }
 
   const indices: number[] = [];

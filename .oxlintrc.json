@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": [".sandcastle/**", ".claude/**", "src/data/**"],
+  "rules": {
+    "no-nested-ternary": "error",
+    "oxc/no-accumulating-spread": "error",
+    "no-unused-vars": ["warn", { "ignoreRestSiblings": true }]
+  }
+}
