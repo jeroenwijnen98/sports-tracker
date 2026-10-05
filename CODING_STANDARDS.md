@@ -1,8 +1,8 @@
 # Coding Standards
 
-The reviewer agent loads this file via @.sandcastle/CODING_STANDARDS.md. It
-supplements `CLAUDE.md` and `GLOSSARY.md` in the repo root; where they differ,
-those win.
+Read during review: by `/code-review`, and by the sandcastle reviewer
+(`.sandcastle/review-prompt.md`). It supplements `CLAUDE.md` and `GLOSSARY.md`; where they
+differ, those win.
 
 ## Style
 
@@ -24,9 +24,8 @@ those win.
 
 ## Domain language
 
-`GLOSSARY.md` is the domain model. Names in code follow it (exercise, lap,
-trackpoint, route, detail data, heart rate sensor, smoothness) and avoid the
-words it lists under _Avoid_.
+- Names in code follow `GLOSSARY.md`, avoided synonyms included. A change of
+  meaning goes there.
 
 ## Things that break silently
 
