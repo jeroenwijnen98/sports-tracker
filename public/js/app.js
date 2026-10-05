@@ -3,15 +3,13 @@
 import { getAuthStatus, logout, importExerciseTcx, importExerciseJson } from './api.js';
 import { syncExercises } from './sync.js';
 import { ingestAndSave } from './intake.js';
-import { parseDeviceMap, importToast } from './import.js';
+import { importFiles, importToast } from './import.js';
 import { load as loadDetail } from './services/detailData.js';
 import { renderActivities } from './views/activities.js';
 import { renderActivity } from './views/activity.js';
 import { renderShoes } from './views/shoes.js';
 import { showToast } from './components/toast.js';
 import { keepSessionAlive } from './session.js';
-
-/** @typedef {import('../../types/domain.ts').Exercise} Exercise */
 
 const authScreen = /** @type {HTMLElement} */ (document.getElementById('auth-screen'));
 const appScreen = /** @type {HTMLElement} */ (document.getElementById('app-screen'));
@@ -96,7 +94,7 @@ async function doSync() {
 
 syncBtn.addEventListener('click', doSync);
 
-// Import TCX
+// Import
 importBtn.addEventListener('click', () => importFileInput.click());
 
 importFileInput.addEventListener('change', async () => {
@@ -105,41 +103,11 @@ importFileInput.addEventListener('change', async () => {
 
   importBtn.classList.add('syncing');
   try {
-    /** @type {Exercise[]} */
-    const imported = [];
-    let duplicates = 0;
-
-    /** @type {Map<string, string>} */
-    const deviceMap = new Map();
-    for (const file of files) {
-      if (!file.name.startsWith('products-devices')) continue;
-      for (const [id, name] of parseDeviceMap(await file.text())) deviceMap.set(id, name);
-    }
-
-    for (const file of files) {
-      let exercise;
-      try {
-        if (file.name.endsWith('.json')) {
-          const json = JSON.parse(await file.text());
-          // Skip non-training-session JSON files (activity summaries, HR data, etc.)
-          if (!json.exercises?.length) continue;
-          exercise = await importExerciseJson(json);
-        } else {
-          exercise = await importExerciseTcx(await file.text());
-        }
-        if (exercise._duplicate) {
-          duplicates++;
-          continue;
-        }
-        const device = exercise.device && deviceMap.get(exercise.device);
-        if (device) exercise.device = device;
-        imported.push(exercise);
-      } catch (err) {
-        console.error(`Import failed for ${file.name}:`, /** @type {Error} */ (err).message, err);
-      }
-    }
-
-    const { counts, newIds } = await ingestAndSave(imported);
+    const { counts, duplicates, newIds } = await importFiles(files, {
+      importTcx: importExerciseTcx,
+      importJson: importExerciseJson,
+      ingestAndSave,
+    });
     // Fire-and-forget: eagerly cache detail data for new exercises
     prefetchDetails(newIds);
 

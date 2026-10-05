@@ -1,6 +1,8 @@
 // @ts-check
 
 /** @typedef {import('./intake.js').IntakeCounts} IntakeCounts */
+/** @typedef {import('./api.js').ImportedExercise} ImportedExercise */
+/** @typedef {import('../../types/domain.ts').Exercise} Exercise */
 
 /**
  * The parts of a Polar data export's `products-devices` file used to name devices.
@@ -59,4 +61,67 @@ export function importToast(counts, duplicates) {
   if (counts.newExercises > 0) return { message: parts.join(', '), type: 'success' };
   if (parts.length > 0) return { message: parts.join(', '), type: 'info' };
   return { message: 'Geen hardloopactiviteiten gevonden in de bestanden', type: 'info' };
+}
+
+/**
+ * A file to import, read the way a browser `File` is.
+ * @typedef {{ name: string, text(): Promise<string> }} ImportFile
+ */
+
+/**
+ * The calls the import pipeline makes: the two import routes (each resolving
+ * to the stored exercise flagged `_duplicate` on a 409) and intake.
+ * @typedef {object} ImportAdapters
+ * @property {(xml: string) => Promise<ImportedExercise>} importTcx
+ * @property {(session: unknown) => Promise<ImportedExercise>} importJson
+ * @property {(incoming: Exercise[]) => Promise<{ counts: IntakeCounts, newIds: string[] }>} ingestAndSave
+ */
+
+/**
+ * The import pipeline behind the import button. Builds the device map from
+ * every `products-devices*` file, sends each `.json` file to the JSON import
+ * (skipping JSON without `exercises`: activity summaries, heart rate data and
+ * the like) and every other file to the TCX import, counts the files the server
+ * already had, renames each exercise's device through the map, and hands the
+ * rest to intake. A file that fails is logged and the batch goes on. No DOM.
+ *
+ * @param {ImportFile[]} files
+ * @param {ImportAdapters} adapters
+ * @returns {Promise<{ counts: IntakeCounts, duplicates: number, newIds: string[] }>}
+ */
+export async function importFiles(files, { importTcx, importJson, ingestAndSave }) {
+  /** @type {Map<string, string>} */
+  const deviceMap = new Map();
+  for (const file of files) {
+    if (!file.name.startsWith('products-devices')) continue;
+    for (const [id, name] of parseDeviceMap(await file.text())) deviceMap.set(id, name);
+  }
+
+  /** @type {Exercise[]} */
+  const imported = [];
+  let duplicates = 0;
+  for (const file of files) {
+    try {
+      /** @type {ImportedExercise} */
+      let exercise;
+      if (file.name.endsWith('.json')) {
+        const json = JSON.parse(await file.text());
+        if (!json?.exercises?.length) continue;
+        exercise = await importJson(json);
+      } else {
+        exercise = await importTcx(await file.text());
+      }
+      if (exercise._duplicate) {
+        duplicates++;
+        continue;
+      }
+      const device = exercise.device && deviceMap.get(exercise.device);
+      imported.push(device ? { ...exercise, device } : exercise);
+    } catch (err) {
+      console.error(`Import failed for ${file.name}:`, /** @type {Error} */ (err).message, err);
+    }
+  }
+
+  const { counts, newIds } = await ingestAndSave(imported);
+  return { counts, duplicates, newIds };
 }
