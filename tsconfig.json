@@ -1,19 +1,10 @@
 {
   // Type-checking only: Node strips the types from backend .ts files and the
   // browser loads public/ as it is, so nothing is ever emitted.
+  "extends": "@jeroenwijnen98/standards/tsconfig/node.json",
   "compilerOptions": {
-    "noEmit": true,
-    "target": "esnext",
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    // public/js runs in the browser, so the DOM types are needed too.
     "lib": ["esnext", "dom", "dom.iterable"],
-    "types": ["node"],
-
-    // Only syntax Node can strip: no enums, namespaces, parameter properties
-    // or `import x = require()`. Type-only imports must say `import type`.
-    "erasableSyntaxOnly": true,
-    "verbatimModuleSyntax": true,
-    "allowImportingTsExtensions": true,
 
     // The backend is .ts; the frontend, tests and fixture generator stay .js
     // (JSDoc-typed). Every .js file in `include` is checked, pragma or not.
@@ -21,8 +12,6 @@
     "checkJs": true,
     "resolveJsonModule": true,
 
-    "strict": true,
-    "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
   "include": ["server.ts", "src", "scripts", "public/js", "test", "types"],
