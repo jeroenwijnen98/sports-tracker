@@ -106,7 +106,7 @@ export async function importFiles(files, { importTcx, importJson, ingestAndSave 
       let exercise;
       if (file.name.endsWith('.json')) {
         const json = JSON.parse(await file.text());
-        if (!json?.exercises?.length) continue;
+        if (!json.exercises?.length) continue;
         exercise = await importJson(json);
       } else {
         exercise = await importTcx(await file.text());
