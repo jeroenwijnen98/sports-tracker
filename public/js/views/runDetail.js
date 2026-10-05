@@ -8,7 +8,7 @@ import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODu
 import { formatDate, formatTime } from '../utils/date.js';
 import { escapeHtml } from '../utils/html.js';
 import { createCurrentView } from '../utils/currentView.js';
-import { buildChartSeries, axisBounds, kmTickStep, nearestSample } from '../utils/chartSeries.js';
+import { buildChartSeries, axisBounds, kmTickStep, nearestSample, formatPaceLabel } from '../utils/chartSeries.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 
@@ -85,9 +85,7 @@ export async function openRunDetail(exerciseId) {
           </div>
         </div>
 
-        <div id="run-detail-chart-section" class="run-detail-section" style="display:none">
-          ${chartMarkup()}
-        </div>
+        <div id="run-detail-chart-section" class="run-detail-section" style="display:none"></div>
 
         <div id="run-detail-laps-section" class="run-detail-section" style="display:none">
           <h3 class="run-detail-section-title">Ronden</h3>
@@ -158,7 +156,6 @@ function showRetryButton(ticket) {
     const detail = await load(ticket.exerciseId, { force: true });
     if (!view.isCurrent(ticket)) return;
     if (detail) {
-      chartSection.innerHTML = chartMarkup();
       renderChart(detail);
       renderLaps(detail);
       renderMap(detail, ticket);
@@ -216,10 +213,22 @@ function chartMarkup() {
   `;
 }
 
-/** @param {DetailData} detail */
+/**
+ * The one place that decides whether the chart section shows: only when the
+ * detail data has a chart series. Used by the first load and the retry, so a
+ * GPX-only run never leaves an empty canvas with its toggles.
+ * @param {DetailData} detail
+ */
 function renderChart(detail) {
+  const section = /** @type {HTMLElement} */ (document.getElementById('run-detail-chart-section'));
   chartSeries = buildChartSeries(detail);
-  if (!chartSeries) return;
+  if (!chartSeries) {
+    section.style.display = 'none';
+    section.innerHTML = '';
+    return;
+  }
+  section.innerHTML = chartMarkup();
+  section.style.display = '';
 
   const { hasPace, hasHr } = chartSeries;
   /** @type {ChartMode[]} */
@@ -228,9 +237,6 @@ function renderChart(detail) {
   if (hasHr) modes.push('hr');
   if (hasPace && hasHr) modes.push('both');
   chartMode = modes[0];
-
-  const section = /** @type {HTMLElement} */ (document.getElementById('run-detail-chart-section'));
-  section.style.display = '';
 
   const toggle = /** @type {HTMLElement} */ (document.getElementById('chart-toggle'));
   toggle.style.display = modes.length > 1 ? '' : 'none';
@@ -300,7 +306,7 @@ function drawChart() {
     const [paceLo, paceHi] = axisBounds(paceRange);
     // Pace is inverted: a lower min/km is faster, so it sits higher on the chart.
     paceScale = (v) => pad.top + ((v - paceLo) / (paceHi - paceLo)) * plotH;
-    drawAxisLabels(ctx, pad, plotH, 'left', (i) => formatPaceValue(paceLo + ((paceHi - paceLo) / 4) * i), PACE_COLOR);
+    drawAxisLabels(ctx, pad, plotH, 'left', (i) => formatPaceLabel(paceLo + ((paceHi - paceLo) / 4) * i), PACE_COLOR);
   }
 
   /** @type {Scale | null} */
@@ -466,16 +472,6 @@ function withAlpha(hex, alpha) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-/**
- * @param {number} minPerKm
- * @returns {string}
- */
-function formatPaceValue(minPerKm) {
-  const min = Math.floor(minPerKm);
-  const sec = Math.round((minPerKm - min) * 60);
-  return `${min}:${String(sec).padStart(2, '0')}`;
-}
-
 /* ── Chart scrub ── */
 
 function attachChartScrub() {
@@ -530,7 +526,7 @@ function drawChartCursor(frac) {
   }
 
   const parts = [`${(sample.d / 1000).toFixed(2)} km`];
-  if (paceScale) parts.push(sample.pace !== null ? `${formatPaceValue(sample.pace)} /km` : '--:-- /km');
+  if (paceScale) parts.push(sample.pace !== null ? `${formatPaceLabel(sample.pace)} /km` : '--:-- /km');
   if (hrScale) parts.push(sample.hr ? `${Math.round(sample.hr)} bpm` : '-- bpm');
   const readout = document.getElementById('chart-readout');
   if (readout) readout.textContent = parts.join(' · ');

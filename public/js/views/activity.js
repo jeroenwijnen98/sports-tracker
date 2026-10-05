@@ -1,7 +1,7 @@
 // @ts-check
 
 import { getAll } from '../db.js';
-import { formatDuration, parseISODuration } from '../utils/format.js';
+import { formatDuration, paceParts, parseISODuration } from '../utils/format.js';
 
 /** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
 
@@ -299,10 +299,8 @@ function buildAllData(exercises, now) {
  */
 function formatPaceNRC(durationSeconds, distanceMeters) {
   if (!distanceMeters || distanceMeters === 0) return "--'--''";
-  const paceSeconds = durationSeconds / (distanceMeters / 1000);
-  const min = Math.floor(paceSeconds / 60);
-  const sec = Math.floor(paceSeconds % 60);
-  return `${min}'${String(sec).padStart(2, '0')}''`;
+  const { min, sec } = paceParts(durationSeconds / (distanceMeters / 1000));
+  return `${min}'${sec}''`;
 }
 
 /**

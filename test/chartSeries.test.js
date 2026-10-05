@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildChartSeries, axisBounds, kmTickStep, nearestSample } from '../public/js/utils/chartSeries.js';
+import { buildChartSeries, axisBounds, kmTickStep, nearestSample, formatPaceLabel } from '../public/js/utils/chartSeries.js';
 
 /** @typedef {import('../types/domain.ts').DetailData} DetailData */
 /** @typedef {import('../types/domain.ts').Trackpoint} Trackpoint */
@@ -134,4 +134,11 @@ test('nearestSample picks the sample closest to a distance', () => {
   assert.equal(nearestSample(series, 60).d, 100);
   assert.equal(nearestSample(series, 200).d, 250);
   assert.equal(nearestSample(series, 1000).d, 250);
+});
+
+test('formatPaceLabel rounds like formatPace, so :60 never appears', () => {
+  assert.equal(formatPaceLabel(5.995), '6:00');
+  assert.equal(formatPaceLabel(5.5), '5:30');
+  assert.equal(formatPaceLabel(4.99), '4:59');
+  assert.equal(formatPaceLabel(15), '15:00');
 });

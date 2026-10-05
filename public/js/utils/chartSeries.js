@@ -4,6 +4,8 @@
 // samples, plus the axis bounds, distance ticks and scrub lookup. No DOM, so
 // Node tests import it directly.
 
+import { paceParts } from './format.js';
+
 /** @typedef {import('../../../types/domain.ts').DetailData} DetailData */
 /** @typedef {import('../../../types/domain.ts').Trackpoint} Trackpoint */
 
@@ -183,4 +185,15 @@ export function nearestSample(series, d) {
     if (Math.abs(candidate.d - d) < Math.abs(sample.d - d)) sample = candidate;
   }
   return sample;
+}
+
+/**
+ * A pace in min/km as `m:ss`, for the axis labels and the scrub readout.
+ * Rounds like `formatPace`, so 5.995 shows `6:00`, never `5:60`.
+ * @param {number} minPerKm
+ * @returns {string}
+ */
+export function formatPaceLabel(minPerKm) {
+  const { min, sec } = paceParts(minPerKm * 60);
+  return `${min}:${sec}`;
 }
