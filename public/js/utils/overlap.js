@@ -1,6 +1,7 @@
 // @ts-check
 
 import { parseISODuration } from './format.js';
+import { startDelta } from './startTime.js';
 
 /** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
 
@@ -12,15 +13,18 @@ const OVERLAP_THRESHOLD_MS = 5 * 60 * 1000;
 const isPhoneApp = (device) => !device || device === 'Polar Beat';
 
 /**
+ * Whether two recordings started within the window and ran at the same time.
+ * Starts are compared as exercise identity compares them; a start that cannot
+ * be compared (none, or an instant against a local time) is never an overlap.
+ *
  * @param {Exercise} a
  * @param {Exercise} b
  */
 function overlapsInTime(a, b) {
-  const aStart = new Date(a['start-time']).getTime();
-  const aEnd = aStart + parseISODuration(a.duration) * 1000;
-  const bStart = new Date(b['start-time']).getTime();
-  const bEnd = bStart + parseISODuration(b.duration) * 1000;
-  return Math.abs(aStart - bStart) < OVERLAP_THRESHOLD_MS && aStart < bEnd && bStart < aEnd;
+  const delta = startDelta(a, b);
+  if (delta === null || Math.abs(delta) >= OVERLAP_THRESHOLD_MS) return false;
+  // b starts before a ends, and a starts before b ends.
+  return delta < parseISODuration(a.duration) * 1000 && -delta < parseISODuration(b.duration) * 1000;
 }
 
 /**

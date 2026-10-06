@@ -34,8 +34,10 @@ _Avoid_: sport type, discipline
 
 **Overlap**:
 The state of an exercise that records the same run a second time, because two
-devices were recording at once. An overlapping exercise stays visible but does
-not count towards any total.
+devices were recording at once: the two started within a few minutes of each
+other and ran at the same time, their starts compared as exercise identity
+compares them. An exercise whose start cannot be compared is never an overlap.
+An overlapping exercise stays visible but does not count towards any total.
 _Avoid_: duplicate, double, ghost run
 
 **Detail data**:
