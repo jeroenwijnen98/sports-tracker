@@ -1,9 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startOf, startGap } from '../public/js/utils/startTime.js';
+import { startOf, startGap, compareStart, localDay, localYear } from '../public/js/utils/startTime.js';
 import { polarJsonToExercise, extractTcxMetadata } from '../src/services/importConverters.ts';
 
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
+
+// The browser's zone, for the starts known only as an instant or a local time.
+process.env.TZ = 'Europe/Amsterdam';
 
 // One synthetic run, 08:00 local on a UTC+2 day.
 const LOCAL_START = '2000-06-01T08:00:00.000';
@@ -71,4 +74,51 @@ test('start gap: null when the starts cannot be compared', () => {
   assert.equal(startGap(fromTcx(), fromJsonExport()), null, 'a UTC instant against a local time');
   assert.equal(startGap(fromTcx(null), synced()), null);
   assert.equal(startGap(synced(), fromTcx(null)), null);
+});
+
+/** @type {(exercises: Exercise[]) => (string | null)[]} */
+const sortedStarts = (exercises) => [...exercises].sort(compareStart).map((ex) => ex['start-time']);
+
+test('compare start: newest first by the real start, not the string', () => {
+  // 06:30Z is 08:30 local, after the synced 08:00; as strings it sorts before.
+  const tcx = fromTcx('2000-06-01T06:30:00.000Z');
+  assert.deepEqual(sortedStarts([synced(), tcx]), ['2000-06-01T06:30:00.000Z', LOCAL_START]);
+  assert.deepEqual(sortedStarts([tcx, synced()]), ['2000-06-01T06:30:00.000Z', LOCAL_START]);
+});
+
+test('compare start: an export without offset is read in the browser zone', () => {
+  const exported = fromJsonExport('2000-06-01T08:15:00.000');
+  const tcx = fromTcx('2000-06-01T06:30:00.000Z');
+  assert.deepEqual(
+    sortedStarts([synced(), tcx, exported]),
+    ['2000-06-01T06:30:00.000Z', '2000-06-01T08:15:00.000', LOCAL_START],
+  );
+});
+
+test('compare start: exercises without a start come last', () => {
+  const noStart = fromTcx(null);
+  assert.deepEqual(sortedStarts([noStart, synced(), fromTcx()]).slice(-1), [null]);
+  assert.deepEqual(sortedStarts([synced(), noStart]), [LOCAL_START, null]);
+  assert.equal(compareStart(noStart, fromTcx(null)), 0);
+});
+
+test('local day: the local time when known, across all three formats', () => {
+  // Synced 00:30 local on 1 Jan, offset +60: the instant is still 31 Dec in UTC.
+  const synced0030 = synced({ 'start-time': '2001-01-01T00:30:00.000', 'start-time-utc-offset': 60 });
+  assert.deepEqual(localDay(synced0030), { year: 2001, month: 0, day: 1 });
+  assert.deepEqual(localDay(fromJsonExport('2000-12-31T23:30:00.000')), { year: 2000, month: 11, day: 31 });
+});
+
+test('local day: an instant only is read in the browser zone', () => {
+  // 23:30Z on 31 Dec is 00:30 on 1 Jan in Amsterdam: the next day and year.
+  const tcx = fromTcx('2000-12-31T23:30:00.000Z');
+  assert.deepEqual(localDay(tcx), { year: 2001, month: 0, day: 1 });
+  assert.equal(localYear(tcx), 2001);
+});
+
+test('local day and year: null without a start', () => {
+  assert.equal(localDay(fromTcx(null)), null);
+  assert.equal(localYear(fromTcx(null)), null);
+  assert.equal(localYear(synced({ 'start-time': 'gisteren' })), null);
+  assert.equal(localYear(synced()), 2000);
 });

@@ -3,18 +3,14 @@
 import { getAll } from '../db.js';
 import { createRunCard } from '../components/runCard.js';
 import { openRunDetail } from './runDetail.js';
+import { compareStart } from '../utils/startTime.js';
 
 const panel = /** @type {HTMLElement} */ (document.getElementById('tab-activities'));
 
 export async function renderActivities() {
   const exercises = await getAll('exercises');
 
-  // Sort by start-time descending (newest first)
-  exercises.sort((a, b) => {
-    const dateA = a['start-time'] || '';
-    const dateB = b['start-time'] || '';
-    return dateB.localeCompare(dateA);
-  });
+  exercises.sort(compareStart);
 
   panel.innerHTML = '';
 
