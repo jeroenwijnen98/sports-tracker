@@ -1,0 +1,83 @@
+#!/bin/sh
+# Remembers the last tree the full check passed on, so the git hooks skip
+# re-running it on exactly that tree. Agents run the check before committing
+# and the hook used to run it again: two full suites per commit.
+#
+# A tree is what `git add -A` would commit (tracked and untracked files, minus
+# ignored ones), hashed with `git write-tree`. A scope says how much of the
+# check ran: `full`, or a narrower name the repo defines; a full pass satisfies
+# every scope.
+#
+#   checked-tree run <cmd...>       run the full check, stamp the tree on success
+#   checked-tree hook <cmd...>      from a git hook: skip when the tree being
+#                                   committed passed, else run <cmd> quietly
+#   checked-tree tree               print the working tree's hash
+#   checked-tree stamp <tree> [scope]
+#   checked-tree passed <tree> [scope]   exit 0 when <tree> passed that scope
+#
+# CHECKED_SCOPE is the scope `hook` needs (default full). CHECKED_TREE_REUSE=1,
+# set in the Sandcastle images, makes `run` skip a tree that already passed;
+# outside the sandbox `run` always runs.
+set -eu
+
+stamp=$(git rev-parse --git-path checked-tree)
+
+worktree_hash() {
+  index=$(mktemp)
+  rm -f "$index"
+  # A copy of the real index only seeds git's stat cache; the hash comes from
+  # the files on disk.
+  cp "$(git rev-parse --git-path index)" "$index" 2>/dev/null || true
+  GIT_INDEX_FILE=$index git add -A
+  GIT_INDEX_FILE=$index git write-tree
+  rm -f "$index"
+}
+
+passed() {
+  [ -f "$stamp" ] || return 1
+  read -r stamped_tree stamped_scope <"$stamp"
+  [ "$stamped_tree" = "$1" ] &&
+    { [ "$stamped_scope" = full ] || [ "$stamped_scope" = "${2:-full}" ]; }
+}
+
+case ${1:-} in
+  run)
+    shift
+    tree=$(worktree_hash)
+    if [ -n "${CHECKED_TREE_REUSE:-}" ] && passed "$tree"; then
+      echo "checked-tree: \`$*\` already passed on exactly this tree; not running it again"
+      exit 0
+    fi
+    "$@"
+    echo "$tree full" >"$stamp"
+    ;;
+  hook)
+    shift
+    if passed "$(git write-tree)" "${CHECKED_SCOPE:-full}"; then
+      echo "checked-tree: \`$*\` already passed on exactly this tree; skipping it"
+      exit 0
+    fi
+    log=$(git rev-parse --git-path checked-tree.log)
+    status=0
+    # The check runs on the working tree, which a partial commit leaves
+    # different from the tree being committed: a stamp on it proves nothing.
+    CHECKED_TREE_REUSE= "$@" >"$log" 2>&1 || status=$?
+    if [ "$status" = 0 ]; then
+      echo "checked-tree: \`$*\` passed"
+    else
+      tail -n 60 "$log"
+      echo "checked-tree: \`$*\` failed (exit $status); full output in $log"
+    fi
+    exit "$status"
+    ;;
+  tree) worktree_hash ;;
+  stamp)
+    # A narrower pass never overwrites a full one on the same tree.
+    passed "$2" full || echo "$2 ${3:-full}" >"$stamp"
+    ;;
+  passed) passed "$2" "${3:-full}" ;;
+  *)
+    echo "usage: checked-tree run|hook <cmd...> | tree | stamp <tree> [scope] | passed <tree> [scope]" >&2
+    exit 2
+    ;;
+esac

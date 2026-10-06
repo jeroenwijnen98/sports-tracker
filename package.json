@@ -7,7 +7,8 @@
     "dev": "node server.ts",
     "start": "node server.ts",
     "lint": "oxlint --deny-warnings",
-    "test": "npm run typecheck && npm run lint && node --test 'test/**/*.test.js'",
+    "test": "sh .githooks/checked-tree run npm run --silent check",
+    "check": "npm run typecheck && npm run lint && node --test 'test/**/*.test.js'",
     "typecheck": "tsc -p .",
     "sandcastle": "npx tsx .sandcastle/main.mts",
     "prepare": "git config core.hooksPath .githooks || true"

@@ -29,6 +29,15 @@ USER ${AGENT_UID}:${AGENT_GID}
 RUN curl -fsSL https://claude.ai/install.sh | bash
 ENV PATH="/home/agent/.local/bin:$PATH"
 
+# A Bash command that outlives Claude Code's timeout (2 min by default) moves to
+# the background, and a headless agent then ends its turn "waiting to be
+# notified", losing its uncommitted work. The full check takes minutes: allow 9,
+# under Sandcastle's 10-minute idle timeout.
+ENV BASH_DEFAULT_TIMEOUT_MS=540000 BASH_MAX_TIMEOUT_MS=540000
+# A rerun of the full check on a tree it already passed returns at once
+# (.githooks/checked-tree).
+ENV CHECKED_TREE_REUSE=1
+
 # Dependencies are not baked in: the onSandboxReady hook in main.mts runs
 # `npm ci` from package-lock.json, so the image cannot drift from the repo.
 

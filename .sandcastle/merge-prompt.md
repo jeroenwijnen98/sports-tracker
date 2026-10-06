@@ -17,7 +17,8 @@ For each branch:
    and reading that file again instead of rerunning.
 5. If a check fails, fix the issues before proceeding to the next branch
 
-After all branches are merged, make a single commit summarizing the merge.
+Each `git merge` makes its own merge commit (after resolving a conflict, `git commit --no-edit`
+makes it), so once the last branch is merged there is nothing left to commit.
 
 # CLOSE ISSUES
 

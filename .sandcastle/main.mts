@@ -78,6 +78,35 @@ const hooks = {
   },
 };
 
+// A one-iteration agent can end its turn before it is done: a command that
+// outlives the Bash timeout moves to the background, the agent says it will be
+// notified, and the session ends with its work uncommitted. Resume the session
+// once to let it finish. One that still does not signal completion is listed
+// at the end, and the run exits 1 so sandcastle-night reports it.
+const RESUME_PROMPT =
+  "Your turn ended before you output the completion signal, which stopped any " +
+  "command still running in the background. Check `git status` and `git log`, " +
+  "finish the remaining steps with every command in the foreground, then " +
+  "output the completion signal.";
+const incomplete: string[] = [];
+
+async function finished<
+  R extends {
+    completionSignal?: string;
+    commits: { sha: string }[];
+    resume?: (prompt: string) => Promise<R>;
+  },
+>(result: R, label: string): Promise<R> {
+  let done = result;
+  if (done.completionSignal === undefined && done.resume) {
+    console.warn(`  ! ${label} stopped without completing; resuming it once`);
+    const more = await done.resume(RESUME_PROMPT);
+    done = { ...more, commits: [...done.commits, ...more.commits] };
+  }
+  if (done.completionSignal === undefined) incomplete.push(label);
+  return done;
+}
+
 // ---------------------------------------------------------------------------
 // Main loop
 // ---------------------------------------------------------------------------
@@ -160,15 +189,18 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
 
         // Only review if the implementer produced commits
         if (implement.commits.length > 0) {
-          const review = await sandbox.run({
-            name: "reviewer",
-            maxIterations: 1,
-            agent: sandcastle.claudeCode("claude-opus-5-5"),
-            promptFile: "./.sandcastle/review-prompt.md",
-            promptArgs: {
-              BRANCH: issue.branch,
-            },
-          });
+          const review = await finished(
+            await sandbox.run({
+              name: "reviewer",
+              maxIterations: 1,
+              agent: sandcastle.claudeCode("claude-opus-5-5"),
+              promptFile: "./.sandcastle/review-prompt.md",
+              promptArgs: {
+                BRANCH: issue.branch,
+              },
+            }),
+            `${issue.id} reviewer`,
+          );
 
           // Merge commits from both runs so the merge phase sees all of them.
           // Each sandbox.run() only returns commits from its own run.
@@ -232,23 +264,31 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
   // merge-to-head, not the bind-mount default of head: in head the container
   // works in the host checkout, and its `npm ci` would swap the host's
   // node_modules for Linux binaries.
-  await sandcastle.run({
-    sandbox: docker(),
-    name: "merger",
-    branchStrategy: { type: "merge-to-head" },
-    hooks,
-    maxIterations: 1,
-    agent: sandcastle.claudeCode("claude-opus-5-5"),
-    promptFile: "./.sandcastle/merge-prompt.md",
-    promptArgs: {
-      // A markdown list of branch names, one per line.
-      BRANCHES: completedBranches.map((b) => `- ${b}`).join("\n"),
-      // A markdown list of issue IDs and titles, one per line.
-      ISSUES: completedIssues.map((i) => `- ${i.id}: ${i.title}`).join("\n"),
-    },
-  });
+  await finished(
+    await sandcastle.run({
+      sandbox: docker(),
+      name: "merger",
+      branchStrategy: { type: "merge-to-head" },
+      hooks,
+      maxIterations: 1,
+      agent: sandcastle.claudeCode("claude-opus-5-5"),
+      promptFile: "./.sandcastle/merge-prompt.md",
+      promptArgs: {
+        // A markdown list of branch names, one per line.
+        BRANCHES: completedBranches.map((b) => `- ${b}`).join("\n"),
+        // A markdown list of issue IDs and titles, one per line.
+        ISSUES: completedIssues.map((i) => `- ${i.id}: ${i.title}`).join("\n"),
+      },
+    }),
+    "merger",
+  );
 
   console.log("\nBranches merged.");
 }
 
 console.log("\nAll done.");
+
+if (incomplete.length > 0) {
+  console.error(`\n✗ Stopped without completing: ${incomplete.join(", ")}`);
+  process.exitCode = 1;
+}
