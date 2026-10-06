@@ -34,18 +34,32 @@ export function startOf(ex) {
 }
 
 /**
- * How far apart two exercises start, in ms: compared as instants when both
- * have one, else as local times when both have one. Null when neither works
- * (a UTC TCX against an export without offset): their starts cannot be told.
+ * How much later `b` starts than `a`, in ms (negative when `b` starts first):
+ * compared as instants when both have one, else as local times when both have
+ * one. Null when neither works (a UTC TCX against an export without offset):
+ * their starts cannot be told.
+ *
+ * @param {Exercise} a
+ * @param {Exercise} b
+ * @returns {number | null}
+ */
+export function startDelta(a, b) {
+  const sa = startOf(a);
+  const sb = startOf(b);
+  if (sa.instant !== null && sb.instant !== null) return sb.instant - sa.instant;
+  if (sa.wallClock !== null && sb.wallClock !== null) return sb.wallClock - sa.wallClock;
+  return null;
+}
+
+/**
+ * How far apart two exercises start, in ms, compared as `startDelta` does.
+ * Null when their starts cannot be told.
  *
  * @param {Exercise} a
  * @param {Exercise} b
  * @returns {number | null}
  */
 export function startGap(a, b) {
-  const sa = startOf(a);
-  const sb = startOf(b);
-  if (sa.instant !== null && sb.instant !== null) return Math.abs(sa.instant - sb.instant);
-  if (sa.wallClock !== null && sb.wallClock !== null) return Math.abs(sa.wallClock - sb.wallClock);
-  return null;
+  const delta = startDelta(a, b);
+  return delta === null ? null : Math.abs(delta);
 }

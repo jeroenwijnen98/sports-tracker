@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startOf, startGap } from '../public/js/utils/startTime.js';
+import { startOf, startDelta, startGap } from '../public/js/utils/startTime.js';
 import { polarJsonToExercise, extractTcxMetadata } from '../src/services/importConverters.ts';
 
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
@@ -71,4 +71,12 @@ test('start gap: null when the starts cannot be compared', () => {
   assert.equal(startGap(fromTcx(), fromJsonExport()), null, 'a UTC instant against a local time');
   assert.equal(startGap(fromTcx(null), synced()), null);
   assert.equal(startGap(synced(), fromTcx(null)), null);
+});
+
+test('start delta: signed, how much later the second exercise starts', () => {
+  const later = fromTcx('2000-06-01T06:00:04.000Z');
+  assert.equal(startDelta(synced(), later), 4000);
+  assert.equal(startDelta(later, synced()), -4000);
+  assert.equal(startDelta(fromJsonExport('2000-06-01T08:00:03.000'), synced()), -3000);
+  assert.equal(startDelta(fromTcx(), fromJsonExport()), null);
 });
