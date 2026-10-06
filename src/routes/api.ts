@@ -2,10 +2,10 @@ import { Router } from 'express';
 import type { Response } from 'express';
 import express from 'express';
 import { tokenCheck } from '../middleware/tokenCheck.ts';
-import { polarRequest, withToken, XML_ACCEPT } from '../services/polarApi.ts';
+import { withToken } from '../services/polarApi.ts';
 import { syncFromPolar } from '../services/polarSync.ts';
 import { readCache, removeFromCache, CorruptCacheError } from '../services/exerciseCache.ts';
-import { readXmlCache, writeXmlCache, isXmlType } from '../services/xmlCache.ts';
+import { readExerciseXml } from '../services/exerciseXml.ts';
 import { withHrSensor } from '../services/hrSensor.ts';
 import { importExercise, diskImportStore } from '../services/importExercise.ts';
 import type { ImportSource } from '../services/importExercise.ts';
@@ -48,25 +48,9 @@ router.delete('/exercises/:id', async (req, res) => {
 
 router.get('/exercises/:id/:type', async (req, res, next) => {
   const { id, type } = req.params;
-  if (!isXmlType(type)) return next();
-
-  // Serve from server-side cache (populated during sync transaction)
-  const cached = await readXmlCache(type, id);
-  if (cached) {
-    return res.type('application/xml').send(cached);
-  }
-
-  // Fallback: try Training Data API (works outside transactions)
-  try {
-    const polarRes = await polarRequest(req.accessToken!, `/exercises/${id}/${type}`, { accept: XML_ACCEPT[type] });
-    const xml = await polarRes.text();
-    await writeXmlCache(type, id, xml);
-    console.log(`[Polar] Fetched & cached ${type.toUpperCase()} for ${id} via Training Data API`);
-    return res.type('application/xml').send(xml);
-  } catch {
-    // Training Data API doesn't have it either
-  }
-
+  const answer = await readExerciseXml(withToken(req.accessToken!), type, id);
+  if (answer.status === 'not-xml') return next();
+  if (answer.status === 'found') return res.type('application/xml').send(answer.xml);
   res.status(404).json({ error: `${type.toUpperCase()} data niet beschikbaar.` });
 });
 
