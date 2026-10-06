@@ -1,6 +1,6 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -26,15 +26,17 @@ after(async () => {
 beforeEach(async () => {
   await rm(join(dir, 'exercises.json'), { force: true });
   await rm(join(dir, 'deletedExercises.json'), { force: true });
+  await rm(join(dir, 'tcx'), { recursive: true, force: true });
+  await rm(join(dir, 'gpx'), { recursive: true, force: true });
 });
 
 const LIST = 'https://polar.test/transactions/7';
 /** @type {(id: string) => string} */
 const exerciseUrl = (id) => `${LIST}/exercises/${id}`;
 
-/** @type {(id: string) => Exercise} */
-const exercise = (id) => ({
-  id, 'start-time': '2000-01-01T08:00:00.000', duration: 'PT30M', 'detailed-sport-info': 'RUNNING', 'has-route': false,
+/** @type {(id: string, hasRoute?: boolean) => Exercise} */
+const exercise = (id, hasRoute = false) => ({
+  id, 'start-time': '2000-01-01T08:00:00.000', duration: 'PT30M', 'detailed-sport-info': 'RUNNING', 'has-route': hasRoute,
 });
 
 /**
@@ -49,6 +51,10 @@ function fakePolar({ transaction = [], trainingApi = [], failing = [], log }) {
     if (failing.includes(url)) throw new Error('Polar API error: 500');
     if (method === 'POST') return Response.json({ 'resource-uri': LIST }, { status: 201 });
     if (url === '/exercises') return Response.json(trainingApi);
+    for (const e of trainingApi) {
+      if (url === `/exercises/${e.id}/tcx`) return new Response(`<tcx id="${e.id}"/>`);
+      if (url === `/exercises/${e.id}/gpx` && e['has-route']) return new Response(`<gpx id="${e.id}"/>`);
+    }
     if (url === LIST) return method === 'PUT' ? new Response(null) : Response.json({ exercises: transaction.map((e) => exerciseUrl(e.id)) });
     for (const e of transaction) {
       if (url === exerciseUrl(e.id)) return Response.json(e);
@@ -56,6 +62,11 @@ function fakePolar({ transaction = [], trainingApi = [], failing = [], log }) {
     }
     throw new Error(`Polar API error: 404 ${url}`);
   };
+}
+
+/** @type {(type: string, id: string) => Promise<string | null>} */
+async function cachedXml(type, id) {
+  return readFile(join(dir, type, `${id}.xml`), 'utf-8').catch(() => null);
 }
 
 async function cachedIds() {
@@ -103,6 +114,8 @@ test('a deleted exercise is skipped from both sources', async () => {
   assert.deepEqual(result.failed, []);
   assert.equal(result.added, 2);
   assert.deepEqual(await cachedIds(), ['6', '7']);
+  assert.ok(!log.some((l) => l.includes('/exercises/5')));
+  assert.equal(await cachedXml('tcx', '5'), null);
 });
 
 test('a failing Training Data API is only logged', async () => {
@@ -114,4 +127,69 @@ test('a failing Training Data API is only logged', async () => {
   });
 
   assert.deepEqual(result, { fromTransaction: 1, fromTrainingApi: 0, added: 1, failed: [] });
+});
+
+test('a Training Data API exercise is synced with its TCX, and its GPX when it has a route', async () => {
+  /** @type {string[]} */
+  const log = [];
+  const result = await sync.syncFromPolar({
+    request: fakePolar({ trainingApi: [exercise('10', true), exercise('11')], log }),
+    userId: 42,
+  });
+
+  assert.deepEqual(result.failed, []);
+  assert.equal(await cachedXml('tcx', '10'), '<tcx id="10"/>');
+  assert.equal(await cachedXml('gpx', '10'), '<gpx id="10"/>');
+  assert.equal(await cachedXml('tcx', '11'), '<tcx id="11"/>');
+  assert.equal(await cachedXml('gpx', '11'), null);
+  assert.ok(!log.includes('GET /exercises/11/gpx'));
+});
+
+test('a failed top-up fetch is reported, and the sync goes on and still commits', async () => {
+  /** @type {string[]} */
+  const log = [];
+  const result = await sync.syncFromPolar({
+    request: fakePolar({
+      transaction: [exercise('12')],
+      trainingApi: [exercise('13', true), exercise('14')],
+      failing: ['/exercises/13/tcx'],
+      log,
+    }),
+    userId: 42,
+  });
+
+  assert.deepEqual(result.failed, ['/exercises/13/tcx']);
+  assert.equal(result.fromTransaction, 1);
+  // The exercise JSON is stored all the same, and so is what did arrive
+  assert.deepEqual(await cachedIds(), ['12', '13', '14']);
+  assert.equal(await cachedXml('gpx', '13'), '<gpx id="13"/>');
+  assert.equal(await cachedXml('tcx', '14'), '<tcx id="14"/>');
+  assert.ok(log.includes(`PUT ${LIST}`));
+});
+
+test('XML already cached is not fetched again', async () => {
+  await mkdir(join(dir, 'tcx'), { recursive: true });
+  await writeFile(join(dir, 'tcx', '15.xml'), '<tcx kept/>');
+  /** @type {string[]} */
+  const log = [];
+  const result = await sync.syncFromPolar({
+    request: fakePolar({ trainingApi: [exercise('15', true)], log }),
+    userId: 42,
+  });
+
+  assert.deepEqual(result.failed, []);
+  assert.ok(!log.includes('GET /exercises/15/tcx'));
+  assert.ok(log.includes('GET /exercises/15/gpx'));
+  assert.equal(await cachedXml('tcx', '15'), '<tcx kept/>');
+});
+
+test('an exercise already in the cache is not fetched by the top-up', async () => {
+  /** @type {string[]} */
+  const log = [];
+  await sync.syncFromPolar({
+    request: fakePolar({ transaction: [exercise('16')], trainingApi: [exercise('16')], log }),
+    userId: 42,
+  });
+
+  assert.ok(!log.some((l) => l.startsWith('GET /exercises/16')));
 });
