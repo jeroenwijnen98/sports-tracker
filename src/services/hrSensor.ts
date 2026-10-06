@@ -1,7 +1,6 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import type {
-  Exercise,
   HeartRateSensor,
   HeartRateSensorLabel,
   HeartRateTexture,
@@ -239,16 +238,4 @@ export async function recordHrSensor(exerciseId: string, xml: string): Promise<H
   map[exerciseId] = result;
   await writeSensorCache(map);
   return result;
-}
-
-/**
- * Attach stored sensor labels to a list of exercises, without overwriting a
- * field the exercise already carries.
- */
-export async function withHrSensor(exercises: Exercise[]): Promise<Exercise[]> {
-  const map = await readSensorCache();
-  return exercises.map((exercise) => {
-    const sensor = map[exercise.id];
-    return sensor ? { ...exercise, hrSensor: sensor } : exercise;
-  });
 }

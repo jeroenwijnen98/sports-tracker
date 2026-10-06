@@ -1,7 +1,5 @@
 import type { Exercise, HeartRateSensor } from '../../types/domain.ts';
-import { readCache, appendToCache, revertAppend } from './exerciseCache.ts';
-import { writeXmlCache } from './xmlCache.ts';
-import { withHrSensor } from './hrSensor.ts';
+import { addExercises, find, revert, writeXml } from './exerciseArchive.ts';
 import { polarJsonToTcx, polarJsonToExercise, extractTcxMetadata } from './importConverters.ts';
 import type { ExportSession } from './importConverters.ts';
 
@@ -31,17 +29,18 @@ export interface ImportStore {
   writeTcx(exerciseId: string, xml: string): Promise<HeartRateSensor | null>;
 }
 
-/** The real store: the exercise cache plus the XML cache. */
+/**
+ * The real store, a thin adapter over the exercise archive. An import is not
+ * subject to the deleted rule: importing a deleted run on purpose brings it
+ * back.
+ */
 export const diskImportStore: ImportStore = {
-  async findExercise(id) {
-    const found = (await readCache()).find((e) => e.id === id);
-    return found && (await withHrSensor([found]))[0];
-  },
+  findExercise: find,
   async saveExercise(exercise) {
-    await appendToCache([exercise]);
+    await addExercises([exercise], { source: 'import' });
   },
-  removeExercise: revertAppend,
-  writeTcx: (exerciseId, xml) => writeXmlCache('tcx', exerciseId, xml),
+  removeExercise: revert,
+  writeTcx: (exerciseId, xml) => writeXml('tcx', exerciseId, xml),
 };
 
 /** The exercise and the TCX to store for it. */

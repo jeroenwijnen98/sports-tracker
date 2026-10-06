@@ -4,9 +4,8 @@ import express from 'express';
 import { tokenCheck } from '../middleware/tokenCheck.ts';
 import { withToken } from '../services/polarApi.ts';
 import { syncFromPolar } from '../services/polarSync.ts';
-import { readCache, removeFromCache, CorruptCacheError } from '../services/exerciseCache.ts';
+import * as archive from '../services/exerciseArchive.ts';
 import { readExerciseXml } from '../services/exerciseXml.ts';
-import { withHrSensor } from '../services/hrSensor.ts';
 import { importExercise, diskImportStore } from '../services/importExercise.ts';
 import type { ImportSource } from '../services/importExercise.ts';
 import type { ExportSession } from '../services/importConverters.ts';
@@ -20,13 +19,12 @@ router.get('/exercises', async (req, res) => {
     // tokenCheck has set both, or the request never got here
     await syncFromPolar({ request: withToken(req.accessToken!), userId: req.polarUserId! });
 
-    // Return all cached exercises (combines both sources)
-    const all = await readCache();
-    res.json(await withHrSensor(all));
+    // Return all stored exercises (combines both sources)
+    res.json(await archive.list());
   } catch (err) {
     console.error('Exercises fetch error:', (err as Error).message);
     // An unreadable cache is this server's fault, not Polar's
-    if (err instanceof CorruptCacheError) {
+    if (err instanceof archive.CorruptCacheError) {
       res.status(500).json({ error: 'Opgeslagen activiteiten onleesbaar' });
       return;
     }
@@ -36,7 +34,7 @@ router.get('/exercises', async (req, res) => {
 
 router.delete('/exercises/:id', async (req, res) => {
   try {
-    const removed = await removeFromCache(req.params.id);
+    const removed = await archive.remove(req.params.id);
     if (!removed) return res.status(404).json({ error: 'Activiteit niet gevonden' });
     console.log(`[Cache] Deleted exercise ${req.params.id}`);
     res.status(204).end();

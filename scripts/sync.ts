@@ -8,7 +8,7 @@ import 'dotenv/config';
 import { getToken } from '../src/services/tokenStore.ts';
 import { syncFromPolar } from '../src/services/polarSync.ts';
 import { withToken } from '../src/services/polarApi.ts';
-import { readCache } from '../src/services/exerciseCache.ts';
+import { list } from '../src/services/exerciseArchive.ts';
 
 async function main(): Promise<void> {
   const token = await getToken();
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
     userId: token.x_user_id,
   });
 
-  const cached = await readCache();
+  const cached = await list();
   console.log(
     `[sync] ${fromTransaction} from transaction, ${fromTrainingApi} from Training Data API; ` +
     `added ${added} new exercises to cache (${cached.length} total)`

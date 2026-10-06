@@ -1,9 +1,9 @@
 import type { Exercise } from '../../types/domain.ts';
-import { appendToCache, readCache, readDeletedIds } from './exerciseCache.ts';
+import { addExercises, list, readXml, verify, writeXml } from './exerciseArchive.ts';
+import type { XmlType } from './exerciseArchive.ts';
 import { XML_ACCEPT } from './polarApi.ts';
 import { consumeTransaction, diskStore } from './transactionConsumer.ts';
 import type { PolarRequest } from './transactionConsumer.ts';
-import type { XmlType } from './xmlCache.ts';
 
 export interface SyncResult {
   /** Exercises the transaction handed over with their TCX/GPX all on disk. */
@@ -36,12 +36,12 @@ export interface SyncResult {
  *    30 days and is not attempted. A failed list is logged, not thrown: the
  *    transaction's exercises are already on disk.
  *
- * Exercises the user deleted are skipped from both sources (`diskStore` does
- * it for the transaction), or the Training Data API would hand a recent one
- * straight back.
+ * The archive skips exercises the user deleted from both sources, and detail
+ * data is secured only for listed exercises the archive holds, so a deleted
+ * one is not fetched either.
  *
- * Both files are read before the transaction is opened: an unreadable cache
- * or deleted-exercise list throws here, so the sync fails with nothing
+ * The archive is verified before the transaction is opened: an unreadable
+ * cache or deleted-exercise list throws here, so the sync fails with nothing
  * consumed and nothing overwritten.
  *
  * `request` is `polarRequest` with the token bound (`withToken`).
@@ -49,25 +49,25 @@ export interface SyncResult {
 export async function syncFromPolar(
   { request, userId }: { request: PolarRequest; userId: number },
 ): Promise<SyncResult> {
-  const before = (await readCache()).length;
-  const deletedIds = await readDeletedIds();
+  await verify();
+  const before = (await list()).length;
   const { secured, failed } = await consumeTransaction({ request, store: diskStore, userId });
-  let added = (await readCache()).length - before;
+  let added = (await list()).length - before;
 
   let fromTrainingApi = 0;
   try {
     const trainingExercises: Exercise[] = await (await request('/exercises')).json();
     fromTrainingApi = trainingExercises.length;
-    const listed = trainingExercises.filter((e) => !deletedIds.has(String(e.id)));
-    const cachedIds = new Set((await readCache()).map((e) => String(e.id)));
-    const newExercises = listed.filter((e) => !cachedIds.has(String(e.id)));
-    const addedFromTrainingApi = await appendToCache(newExercises);
+    const addedFromTrainingApi = await addExercises(trainingExercises, { source: 'training-api' });
     if (addedFromTrainingApi > 0) {
       console.log(`[Polar] Added ${addedFromTrainingApi} exercises from Training Data API`);
     }
     added += addedFromTrainingApi;
-    // Every listed exercise, not only the new ones: one already cached whose
-    // TCX/GPX never reached disk is backfilled while Polar still serves it
+    // Every listed exercise the archive holds, not only the new ones: one
+    // already stored whose TCX/GPX never reached disk is backfilled while
+    // Polar still serves it. A deleted one is not held, so not fetched
+    const archived = new Set((await list()).map((e) => String(e.id)));
+    const listed = trainingExercises.filter((e) => archived.has(String(e.id)));
     failed.push(...await secureDetailData(request, listed));
   } catch (err) {
     console.log('[Polar] Training Data API unavailable:', (err as Error).message);
@@ -78,7 +78,7 @@ export async function syncFromPolar(
 
 /**
  * Write each exercise's TCX and, with a route, its GPX from the Training Data
- * API to the XML cache, which classifies the heart rate sensor. XML already on
+ * API to the archive, which classifies the heart rate sensor. XML already on
  * disk is not fetched again. One failure does not stop the others.
  * Returns the paths that failed.
  */
@@ -89,9 +89,9 @@ async function secureDetailData(request: PolarRequest, exercises: Exercise[]): P
     for (const type of types) {
       const path = `/exercises/${exercise.id}/${type}`;
       try {
-        if (await diskStore.hasXml(type, exercise.id)) continue;
+        if ((await readXml(type, exercise.id)) !== null) continue;
         const xml = await (await request(path, { accept: XML_ACCEPT[type] })).text();
-        await diskStore.writeXml(type, exercise.id, xml);
+        await writeXml(type, exercise.id, xml);
       } catch (err) {
         console.log(`[Polar] ${type.toUpperCase()} for ${path} failed:`, (err as Error).message);
         failed.push(path);

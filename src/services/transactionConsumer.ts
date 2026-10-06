@@ -1,9 +1,8 @@
 import type { Exercise } from '../../types/domain.ts';
 import { XML_ACCEPT } from './polarApi.ts';
 import type { PolarRequestOptions } from './polarApi.ts';
-import { appendToCache, readDeletedIds } from './exerciseCache.ts';
-import { readXmlCache, writeXmlCache } from './xmlCache.ts';
-import type { XmlType } from './xmlCache.ts';
+import { addExercises, readXml, writeXml } from './exerciseArchive.ts';
+import type { XmlType } from './exerciseArchive.ts';
 
 /** `polarRequest` with the access token already bound. */
 export type PolarRequest = (url: string, options?: PolarRequestOptions) => Promise<Response>;
@@ -24,22 +23,20 @@ export interface ConsumeResult {
 }
 
 /**
- * The real store: the exercise cache plus the XML cache.
- *
- * It, not the consumer, skips exercises the user deleted, so no writer of the
- * exercise cache can bring one back. Skipping one counts as secured: the user
- * chose not to keep it, so it must not hold the transaction open.
+ * The real store, a thin adapter over the exercise archive. The archive, not
+ * the consumer, skips exercises the user deleted. Skipping one counts as
+ * secured: the user chose not to keep it, so it must not hold the
+ * transaction open.
  */
 export const diskStore: TransactionStore = {
   async saveExercise(exercise) {
-    if ((await readDeletedIds()).has(exercise.id)) return;
-    await appendToCache([exercise]);
+    await addExercises([exercise], { source: 'transaction' });
   },
   async hasXml(type, exerciseId) {
-    return (await readXmlCache(type, exerciseId)) !== null;
+    return (await readXml(type, exerciseId)) !== null;
   },
   async writeXml(type, exerciseId, xml) {
-    await writeXmlCache(type, exerciseId, xml);
+    await writeXml(type, exerciseId, xml);
   },
 };
 

@@ -67,14 +67,20 @@ export async function readCache(): Promise<Exercise[]> {
 }
 
 /**
- * Append new exercises to cache, skipping duplicates by id.
+ * Append new exercises to cache, skipping duplicates by id and, with
+ * `skipDeleted`, exercises the user deleted. The deleted ids are read under
+ * the same lock, so a delete cannot slip in between the check and the write.
  * Returns the count of newly added exercises.
  */
-export async function appendToCache(newExercises: Exercise[]): Promise<number> {
+export async function appendToCache(
+  newExercises: Exercise[],
+  { skipDeleted = false }: { skipDeleted?: boolean } = {},
+): Promise<number> {
   return writes.run(async () => {
     const existing = await readCache();
-    const existingIds = new Set(existing.map((e) => e.id));
-    const unique = newExercises.filter((e) => !existingIds.has(e.id));
+    const skipped = new Set(existing.map((e) => String(e.id)));
+    if (skipDeleted) for (const id of await readDeletedIds()) skipped.add(id);
+    const unique = newExercises.filter((e) => !skipped.has(String(e.id)));
     if (unique.length > 0) {
       await writeJsonAtomic(CACHE_PATH, [...existing, ...unique]);
     }
