@@ -29,9 +29,11 @@ async function main(): Promise<void> {
     `added ${added} new exercises to cache (${cached.length} total)`
   );
 
-  // run.sh appends this to logs/sync.log, so an open transaction shows up there
+  // run.sh appends this to logs/sync.log. A full transaction URL means the
+  // transaction was left open and the next sync retries it; an
+  // /exercises/{id}/tcx or /gpx path is detail data the top-up could not fetch
   if (failed.length > 0) {
-    console.log(`[sync] Transaction left open, ${failed.length} failed; the next sync retries:`);
+    console.log(`[sync] ${failed.length} fetches failed:`);
     for (const url of failed) console.log(`[sync]   failed: ${url}`);
   }
 }
