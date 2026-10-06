@@ -2,21 +2,9 @@
 
 import { getAll } from '../db.js';
 import { formatDuration, paceParts, parseISODuration } from '../utils/format.js';
+import { periodData } from '../utils/activityPeriods.js';
 
-/** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
-
-/** @typedef {'W' | 'M' | 'Y' | 'All'} Mode */
-
-/**
- * One bar of the chart: the kilometres run in one day, week, month or year.
- * @typedef {{ km: number, label: string, key?: string, year?: number }} Bar
- */
-
-/** @typedef {{ filtered: Exercise[], bars: Bar[], periodLabel: string }} PeriodData */
-
-const MONTH_LABELS = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'];
-const MONTH_NAMES = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
-const DAY_LABELS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
+/** @typedef {import('../utils/activityPeriods.js').Mode} Mode */
 
 /** @type {Mode} */
 let currentMode = 'Y';
@@ -26,7 +14,7 @@ export async function renderActivity() {
   const allExercises = await getAll('exercises');
   const exercises = allExercises.filter((ex) => !ex.overlap);
 
-  const { filtered, bars, periodLabel } = getData(currentMode, exercises);
+  const { filtered, bars, periodLabel } = periodData(currentMode, exercises, new Date());
 
   // Totals
   let totalKm = 0;
@@ -124,170 +112,6 @@ export async function renderActivity() {
       renderActivity();
     });
   });
-}
-
-/* ── Data builders ── */
-
-/**
- * @param {Mode} mode
- * @param {Exercise[]} exercises
- * @returns {PeriodData}
- */
-function getData(mode, exercises) {
-  const now = new Date();
-  switch (mode) {
-    case 'W':
-      return buildWeekData(exercises, now);
-    case 'M':
-      return buildMonthData(exercises, now);
-    case 'Y':
-      return buildYearData(exercises, now);
-    default:
-      return buildAllData(exercises, now);
-  }
-}
-
-/**
- * @param {Exercise[]} exercises
- * @param {Date} now
- * @returns {PeriodData}
- */
-function buildWeekData(exercises, now) {
-  const day = now.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff);
-  monday.setHours(0, 0, 0, 0);
-  const sunday = new Date(monday);
-  sunday.setDate(sunday.getDate() + 6);
-  sunday.setHours(23, 59, 59, 999);
-
-  const filtered = exercises.filter((ex) => {
-    const d = new Date(ex['start-time']);
-    return d >= monday && d <= sunday;
-  });
-
-  const bars = DAY_LABELS.map((label) => ({ km: 0, label }));
-
-  for (const ex of filtered) {
-    const d = new Date(ex['start-time']);
-    let dow = d.getDay() - 1;
-    if (dow < 0) dow = 6;
-    bars[dow].km += (ex.distance || 0) / 1000;
-  }
-
-  return { filtered, bars, periodLabel: 'Deze week' };
-}
-
-/**
- * @param {Exercise[]} exercises
- * @param {Date} now
- * @returns {PeriodData}
- */
-function buildMonthData(exercises, now) {
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0, 23, 59, 59, 999);
-  const daysInMonth = lastDay.getDate();
-
-  const filtered = exercises.filter((ex) => {
-    const d = new Date(ex['start-time']);
-    return d >= firstDay && d <= lastDay;
-  });
-
-  /** @type {number[]} */
-  const starts = [];
-  for (let d = 1; d <= daysInMonth; d += 7) starts.push(d);
-
-  /** @type {Bar[]} */
-  const bars = starts.map((start) => ({ km: 0, label: String(start) }));
-
-  for (const ex of filtered) {
-    const d = new Date(ex['start-time']).getDate();
-    for (let i = bars.length - 1; i >= 0; i--) {
-      if (d >= starts[i]) {
-        bars[i].km += (ex.distance || 0) / 1000;
-        break;
-      }
-    }
-  }
-
-  const name = MONTH_NAMES[month];
-  return { filtered, bars, periodLabel: `${name.charAt(0).toUpperCase() + name.slice(1)} ${year}` };
-}
-
-/**
- * @param {Exercise[]} exercises
- * @param {Date} now
- * @returns {PeriodData}
- */
-function buildYearData(exercises, now) {
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-  const startDate = new Date(currentYear, currentMonth - 11, 1);
-  const endDate = new Date(currentYear, currentMonth + 1, 0, 23, 59, 59, 999);
-
-  const filtered = exercises.filter((ex) => {
-    const d = new Date(ex['start-time']);
-    return d >= startDate && d <= endDate;
-  });
-
-  /** @type {Bar[]} */
-  const bars = [];
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(currentYear, currentMonth - 11 + i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    bars.push({ km: 0, label: MONTH_LABELS[d.getMonth()], key });
-  }
-
-  for (const ex of filtered) {
-    const d = new Date(ex['start-time']);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const bar = bars.find((b) => b.key === key);
-    if (bar) bar.km += (ex.distance || 0) / 1000;
-  }
-
-  const startMonth = new Date(currentYear, currentMonth - 11, 1);
-  const periodLabel = `${MONTH_LABELS[startMonth.getMonth()]} ${startMonth.getFullYear()} – ${MONTH_LABELS[currentMonth]} ${currentYear}`;
-
-  return { filtered, bars, periodLabel };
-}
-
-/**
- * @param {Exercise[]} exercises
- * @param {Date} now
- * @returns {PeriodData}
- */
-function buildAllData(exercises, now) {
-  if (exercises.length === 0) {
-    const y = now.getFullYear();
-    return { filtered: [], bars: [{ km: 0, label: String(y) }], periodLabel: String(y) };
-  }
-
-  let minYear = Infinity;
-  let maxYear = -Infinity;
-  for (const ex of exercises) {
-    const y = new Date(ex['start-time']).getFullYear();
-    if (y < minYear) minYear = y;
-    if (y > maxYear) maxYear = y;
-  }
-  maxYear = Math.max(maxYear, now.getFullYear());
-
-  /** @type {Bar[]} */
-  const bars = [];
-  for (let y = minYear; y <= maxYear; y++) {
-    bars.push({ km: 0, label: String(y), year: y });
-  }
-
-  for (const ex of exercises) {
-    const y = new Date(ex['start-time']).getFullYear();
-    const bar = bars.find((b) => b.year === y);
-    if (bar) bar.km += (ex.distance || 0) / 1000;
-  }
-
-  const periodLabel = minYear === maxYear ? String(minYear) : `${minYear}\u2013${maxYear}`;
-
-  return { filtered: [...exercises], bars, periodLabel };
 }
 
 /* ── Helpers ── */

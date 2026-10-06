@@ -49,3 +49,69 @@ export function startGap(a, b) {
   if (sa.wallClock !== null && sb.wallClock !== null) return Math.abs(sa.wallClock - sb.wallClock);
   return null;
 }
+
+/**
+ * One number per exercise to order starts by: its instant, else its local
+ * time read in the browser's zone. Null without a start.
+ *
+ * @param {Exercise} ex
+ * @returns {number | null}
+ */
+function sortKey(ex) {
+  const { instant, wallClock } = startOf(ex);
+  if (instant !== null) return instant;
+  if (wallClock === null) return null;
+  const d = new Date(wallClock);
+  return new Date(
+    d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds(),
+  ).getTime();
+}
+
+/**
+ * Sort comparator: newest start first, exercises without a start last.
+ *
+ * @param {Exercise} a
+ * @param {Exercise} b
+ * @returns {number}
+ */
+export function compareStart(a, b) {
+  const ka = sortKey(a);
+  const kb = sortKey(b);
+  if (ka === null) return kb === null ? 0 : 1;
+  if (kb === null) return -1;
+  return kb - ka;
+}
+
+/** @typedef {{ year: number, month: number, day: number }} LocalDay */
+
+/**
+ * The calendar day an exercise started on, `month` 0–11 as `Date` counts it:
+ * its local time when known, else its instant in the browser's zone. Null
+ * without a start.
+ *
+ * @param {Exercise} ex
+ * @returns {LocalDay | null}
+ */
+export function localDay(ex) {
+  const { instant, wallClock } = startOf(ex);
+  if (wallClock !== null) {
+    const d = new Date(wallClock);
+    return { year: d.getUTCFullYear(), month: d.getUTCMonth(), day: d.getUTCDate() };
+  }
+  if (instant !== null) {
+    const d = new Date(instant);
+    return { year: d.getFullYear(), month: d.getMonth(), day: d.getDate() };
+  }
+  return null;
+}
+
+/**
+ * The year an exercise started in, read as `localDay` reads its day.
+ *
+ * @param {Exercise} ex
+ * @returns {number | null}
+ */
+export function localYear(ex) {
+  return localDay(ex)?.year ?? null;
+}
