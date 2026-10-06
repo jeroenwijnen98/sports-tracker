@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startOf, startDelta, startGap, compareStart, localDay, localYear } from '../public/js/utils/startTime.js';
+import { startOf, startDelta, startGap, compareStart, localStart, localDay, localYear } from '../public/js/utils/startTime.js';
 import { polarJsonToExercise, extractTcxMetadata } from '../src/services/importConverters.ts';
 
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
@@ -129,4 +129,11 @@ test('start delta: signed, how much later the second exercise starts', () => {
   assert.equal(startDelta(later, synced()), -4000);
   assert.equal(startDelta(fromJsonExport('2000-06-01T08:00:03.000'), synced()), -3000);
   assert.equal(startDelta(fromTcx(), fromJsonExport()), null);
+});
+
+test('localStart: the wall clock when known, else the instant in the browser zone', () => {
+  assert.equal(localStart(synced()), WALL_CLOCK);
+  assert.equal(localStart(fromJsonExport()), WALL_CLOCK);
+  assert.equal(localStart(fromTcx()), WALL_CLOCK);
+  assert.equal(localStart(fromTcx(null)), null);
 });

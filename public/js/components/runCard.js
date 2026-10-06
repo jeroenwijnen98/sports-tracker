@@ -1,7 +1,7 @@
 // @ts-check
 
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
-import { formatDate, formatTime } from '../utils/date.js';
+import { formatStart } from '../utils/date.js';
 import { escapeHtml } from '../utils/html.js';
 
 /** @typedef {import('../../../types/domain.ts').Exercise} Exercise */
@@ -26,12 +26,11 @@ export function createRunCard(exercise, options = {}) {
   const durationSec = parseISODuration(exercise.duration);
   const avgHr = exercise['heart-rate']?.average;
   const sport = exercise['detailed-sport-info'];
-  const startTime = exercise['start-time'];
 
   el.innerHTML = `
     <div class="run-card-header">
       <span class="run-card-sport">${sportLabel(sport)}</span>
-      <span class="run-card-date">${formatDate(startTime)} · ${formatTime(startTime)}${exercise.device ? ` · ${escapeHtml(exercise.device)}` : ''}</span>
+      <span class="run-card-date">${formatStart(exercise)}${exercise.device ? ` · ${escapeHtml(exercise.device)}` : ''}</span>
     </div>
     <div class="run-card-distance">
       ${formatDistance(distance)}<span class="run-card-unit">km</span>

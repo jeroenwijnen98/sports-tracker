@@ -5,7 +5,7 @@ import { load, forget } from '../services/detailData.js';
 import { deleteExercise } from '../api.js';
 import { renderActivities } from './activities.js';
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
-import { formatDate, formatTime } from '../utils/date.js';
+import { formatDate, formatStart } from '../utils/date.js';
 import { escapeHtml } from '../utils/html.js';
 import { createCurrentView } from '../utils/currentView.js';
 import { buildChartSeries, axisBounds, kmTickStep, nearestSample, formatPaceLabel } from '../utils/chartSeries.js';
@@ -43,7 +43,6 @@ export async function openRunDetail(exerciseId) {
   const avgHr = exercise['heart-rate']?.average;
   const maxHr = exercise['heart-rate']?.maximum;
   const sport = exercise['detailed-sport-info'];
-  const startTime = exercise['start-time'];
 
   container.innerHTML = `
     <div class="run-detail">
@@ -55,7 +54,7 @@ export async function openRunDetail(exerciseId) {
         </button>
         <div class="run-detail-topbar-info">
           <span class="run-detail-sport">${sportLabel(sport)}</span>
-          <span class="run-detail-date">${formatDate(startTime)} · ${formatTime(startTime)}${exercise.device ? ` · ${escapeHtml(exercise.device)}` : ''}</span>
+          <span class="run-detail-date">${formatStart(exercise)}${exercise.device ? ` · ${escapeHtml(exercise.device)}` : ''}</span>
         </div>
       </div>
 
@@ -688,7 +687,7 @@ function destroyMap() {
 /** @param {Exercise} exercise */
 function confirmDelete(exercise) {
   const dist = formatDistance(exercise.distance || 0);
-  const date = formatDate(exercise['start-time']);
+  const date = formatDate(exercise);
 
   openModal(`
     <div class="modal-header">
