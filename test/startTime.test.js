@@ -40,7 +40,7 @@ test('Polar sync: local time plus offset gives both an instant and a wall clock'
 
 test('TCX <Id>: UTC with Z gives an instant and no wall clock', () => {
   assert.deepEqual(startOf(fromTcx()), { instant: Date.parse(UTC_START), wallClock: null });
-  assert.deepEqual(startOf(fromTcx('2000-06-01T08:00:00+02:00')).instant, Date.parse(UTC_START));
+  assert.equal(startOf(fromTcx('2000-06-01T08:00:00+02:00')).instant, Date.parse(UTC_START));
 });
 
 test('Polar data export: local time without offset gives only a wall clock', () => {
