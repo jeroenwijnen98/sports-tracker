@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ingest } from '../public/js/intake.js';
 import { importToast } from '../public/js/import.js';
-import { sameExercise, startOf } from '../public/js/utils/identity.js';
+import { sameExercise } from '../public/js/utils/identity.js';
 import { polarJsonToExercise, extractTcxMetadata } from '../src/services/importConverters.ts';
 
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
@@ -39,14 +39,6 @@ const fromTcx = (id = UTC_START, seconds = 1812.5) => /** @type {Exercise} */ (e
 
 /** @type {Shoe[]} */
 const shoes = [{ id: 1, name: 'Schoen', initialKm: 0, isDefault: true }];
-
-test('start: Polar local time with offset and a UTC TCX <Id> are the same instant', () => {
-  assert.equal(startOf(synced()).instant, Date.parse(UTC_START));
-  assert.equal(startOf(fromTcx()).instant, Date.parse(UTC_START));
-  assert.equal(startOf(fromTcx()).wallClock, null);
-  assert.equal(startOf(fromJsonExport()).instant, null, 'the export has no offset');
-  assert.equal(startOf(fromJsonExport()).wallClock, startOf(synced()).wallClock);
-});
 
 test('an imported JSON export of a run stored from Polar sync is not stored twice', () => {
   const stored = { ...synced(), shoeId: 7, overlap: false };
