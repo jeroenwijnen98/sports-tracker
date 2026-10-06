@@ -11,6 +11,7 @@ import { appendToCache, readCache, readDeletedIds, removeFromCache, revertAppend
 import { readXmlCache, writeXmlCache } from './xmlCache.ts';
 import type { XmlType } from './xmlCache.ts';
 import { readSensorCache, recordHrSensor } from './hrSensor.ts';
+import type { SensorMap } from './hrSensor.ts';
 
 export { CorruptCacheError } from './exerciseCache.ts';
 export { isXmlType } from './xmlCache.ts';
@@ -73,7 +74,7 @@ export async function writeXml(type: XmlType, id: string, xml: string): Promise<
   try {
     return await recordHrSensor(id, xml);
   } catch (err) {
-    console.log(`[sensors] Could not classify ${id}:`, (err as Error).message);
+    console.log(`[sensors] Could not record the heart rate sensor of ${id}:`, (err as Error).message);
     return null;
   }
 }
@@ -89,10 +90,18 @@ export async function verify(): Promise<void> {
 
 /**
  * The one heart rate sensor join: each exercise gets its stored sensor, which
- * replaces any field it already carries, so it is attached once.
+ * replaces any field it already carries, so it is attached once. The sensor is
+ * only indicative, so an unreadable map is logged and the exercises go out
+ * without one rather than not at all; intake keeps the sensor it already has.
  */
 async function withHrSensor(exercises: Exercise[]): Promise<Exercise[]> {
-  const map = await readSensorCache();
+  let map: SensorMap;
+  try {
+    map = await readSensorCache();
+  } catch (err) {
+    console.log('[sensors] Heart rate sensors left out:', (err as Error).message);
+    return exercises;
+  }
   return exercises.map((exercise) => {
     const sensor = map[exercise.id];
     return sensor ? { ...exercise, hrSensor: sensor } : exercise;

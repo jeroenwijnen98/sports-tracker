@@ -1,6 +1,6 @@
 /**
  * Classifies the heart rate sensor for every cached TCX and writes the result
- * to src/data/hrSensor.json.
+ * to src/data/hrSensor.json, taking the same lock as the server and sync.
  *
  * Safe to re-run: it rebuilds the whole map from the cached TCX files, which
  * are the permanent record. Pass --verbose to list every exercise.

@@ -1,13 +1,24 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type {
   HeartRateSensor,
   HeartRateSensorLabel,
   HeartRateTexture,
 } from '../../types/domain.ts';
 import { DATA_DIR } from '../config.ts';
+import { CorruptCacheError, writeFileAtomic } from './atomicFile.ts';
+import { createWriteLock } from './writeLock.ts';
 
 const CACHE_PATH = join(DATA_DIR, 'hrSensor.json');
+
+/**
+ * Every write of the map runs through this, one at a time in this process and
+ * never at the same time as the server, `scripts/sync.ts` or
+ * `scripts/classify-sensors.ts` in another: two interleaved read-modify-write
+ * cycles would drop one side's sensor. Its own lock, so an exercise write
+ * never waits for a classification.
+ */
+const writes = createWriteLock(join(DATA_DIR, 'hrSensor.lock'));
 
 /** The heart rate sensor of every classified exercise, by exercise id. */
 export type SensorMap = Record<string, HeartRateSensor>;
@@ -213,29 +224,52 @@ export function classifyHrSensor(xml: string): HeartRateSensor | null {
   };
 }
 
+/**
+ * The stored map. A missing file reads as empty; one that exists but does not
+ * parse as an object throws `CorruptCacheError`, so no write replaces every
+ * stored sensor with one entry.
+ */
 export async function readSensorCache(): Promise<SensorMap> {
+  let data: string;
   try {
-    return JSON.parse(await readFile(CACHE_PATH, 'utf-8'));
-  } catch {
-    return {};
+    data = await readFile(CACHE_PATH, 'utf-8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return {};
+    throw err;
   }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch (err) {
+    throw new CorruptCacheError(CACHE_PATH, (err as Error).message);
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new CorruptCacheError(CACHE_PATH, 'not an object');
+  }
+  return parsed as SensorMap;
 }
 
+/**
+ * Replace the whole map, without reading it: `scripts/classify-sensors.ts`
+ * rebuilds it from the cached TCX files, which also mends an unreadable one.
+ */
 export async function writeSensorCache(map: SensorMap): Promise<void> {
-  await mkdir(dirname(CACHE_PATH), { recursive: true });
-  await writeFile(CACHE_PATH, JSON.stringify(map, null, 2));
+  await writes.run(() => writeFileAtomic(CACHE_PATH, JSON.stringify(map, null, 2)));
 }
 
 /**
  * Classify and persist one exercise. Returns the result, or null when the TCX
- * has too little usable heart rate data.
+ * has too little usable heart rate data. Throws when the stored map is
+ * unreadable, leaving it untouched.
  */
 export async function recordHrSensor(exerciseId: string, xml: string): Promise<HeartRateSensor | null> {
   const result = classifyHrSensor(xml);
   if (!result) return null;
 
-  const map = await readSensorCache();
-  map[exerciseId] = result;
-  await writeSensorCache(map);
+  await writes.run(async () => {
+    const map = await readSensorCache();
+    map[exerciseId] = result;
+    await writeFileAtomic(CACHE_PATH, JSON.stringify(map, null, 2));
+  });
   return result;
 }

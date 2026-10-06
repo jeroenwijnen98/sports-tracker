@@ -1,9 +1,11 @@
-import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
-import { basename, dirname, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import type { Exercise } from '../../types/domain.ts';
 import { DATA_DIR } from '../config.ts';
+import { CorruptCacheError, writeFileAtomic } from './atomicFile.ts';
 import { createWriteLock } from './writeLock.ts';
+
+export { CorruptCacheError } from './atomicFile.ts';
 
 const CACHE_PATH = join(DATA_DIR, 'exercises.json');
 const DELETED_PATH = join(DATA_DIR, 'deletedExercises.json');
@@ -14,18 +16,6 @@ const DELETED_PATH = join(DATA_DIR, 'deletedExercises.json');
  * in another: two interleaved cycles would drop one side's exercises.
  */
 const writes = createWriteLock(join(DATA_DIR, 'exercises.lock'));
-
-/**
- * A cache file that exists but cannot be read as a JSON array. Thrown rather
- * than read as empty, so no caller overwrites the record with less than it
- * held.
- */
-export class CorruptCacheError extends Error {
-  constructor(path: string, reason: string) {
-    super(`${basename(path)} is unreadable (${reason}); left on disk untouched`);
-    this.name = 'CorruptCacheError';
-  }
-}
 
 /** A JSON array file: missing reads as empty, anything unparseable throws. */
 async function readJsonArray<T>(path: string): Promise<T[]> {
@@ -46,20 +36,9 @@ async function readJsonArray<T>(path: string): Promise<T[]> {
   return parsed;
 }
 
-/**
- * Write through a temporary file in the same directory, then rename it into
- * place: a write cut off mid-way leaves the old file, never half of a new one.
- */
+/** Write a JSON value through `writeFileAtomic`. */
 async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const tmp = `${path}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(tmp, JSON.stringify(value, null, 2));
-    await rename(tmp, path);
-  } catch (err) {
-    await rm(tmp, { force: true });
-    throw err;
-  }
+  await writeFileAtomic(path, JSON.stringify(value, null, 2));
 }
 
 export async function readCache(): Promise<Exercise[]> {

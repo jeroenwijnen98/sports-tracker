@@ -1,9 +1,11 @@
 import { test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, readdir, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
 
@@ -107,3 +109,68 @@ for (const file of ['exercises.json', 'deletedExercises.json']) {
     assert.equal(await readFile(join(dir, file), 'utf-8'), '[{"id": "1"');
   });
 }
+
+test('a missing heart rate sensor map reads as empty', async () => {
+  await archive.addExercises([exercise('1')], { source: 'import' });
+
+  assert.deepEqual(await archive.list(), [exercise('1')]);
+  assert.equal(await archive.writeXml('tcx', '1', fixture('hr-strap.tcx')).then((s) => s?.label), 'chest-strap');
+  assert.deepEqual(Object.keys(JSON.parse(await readFile(join(dir, 'hrSensor.json'), 'utf-8'))), ['1']);
+});
+
+for (const [kind, contents] of [['truncated', '{"1": {"label": "wr'], ['not an object', '[]']]) {
+  test(`a ${kind} heart rate sensor map is left untouched and the TCX is still written`, async () => {
+    await writeFile(join(dir, 'hrSensor.json'), contents);
+    await archive.addExercises([exercise('1')], { source: 'import' });
+
+    assert.equal(await archive.writeXml('tcx', '1', fixture('hr-strap.tcx')), null);
+    assert.equal(await archive.readXml('tcx', '1'), fixture('hr-strap.tcx'));
+    assert.equal(await readFile(join(dir, 'hrSensor.json'), 'utf-8'), contents);
+    // The exercises still go out, only without a heart rate sensor
+    assert.deepEqual(await archive.list(), [exercise('1')]);
+  });
+}
+
+test('concurrent heart rate sensor recordings all end up in the map', async () => {
+  const ids = Array.from({ length: 20 }, (_, i) => `s${i}`);
+  const tcx = (/** @type {number} */ i) => fixture(i % 2 ? 'hr-wrist.tcx' : 'hr-strap.tcx');
+
+  const sensors = await Promise.all(ids.map((id, i) => archive.writeXml('tcx', id, tcx(i))));
+
+  assert.ok(sensors.every((s) => s !== null));
+  const map = JSON.parse(await readFile(join(dir, 'hrSensor.json'), 'utf-8'));
+  assert.deepEqual(Object.keys(map).sort(), [...ids].sort());
+  assert.deepEqual(ids.map((id) => map[id].label), ids.map((_, i) => (i % 2 ? 'wrist' : 'chest-strap')));
+});
+
+test('the map, TCX and GPX are written through a temporary file that is gone afterwards', async () => {
+  await archive.writeXml('tcx', '1', fixture('hr-strap.tcx'));
+  await archive.writeXml('tcx', '1', fixture('hr-wrist.tcx'));
+  await archive.writeXml('gpx', '1', '<gpx/>');
+
+  assert.deepEqual((await readdir(dir)).sort(), ['gpx', 'hrSensor.json', 'tcx']);
+  assert.deepEqual(await readdir(join(dir, 'tcx')), ['1.xml']);
+  assert.deepEqual(await readdir(join(dir, 'gpx')), ['1.xml']);
+  assert.equal(await archive.readXml('tcx', '1'), fixture('hr-wrist.tcx'));
+});
+
+test('the classify script waits for the heart rate sensor lock, then rebuilds the map', async () => {
+  await archive.writeXml('tcx', '1', fixture('hr-strap.tcx'));
+  await writeFile(join(dir, 'hrSensor.json'), 'not json');
+  // The test runner that started this file: a process that is running
+  await writeFile(join(dir, 'hrSensor.lock'), `${process.ppid} other`);
+
+  const script = fileURLToPath(new URL('../scripts/classify-sensors.ts', import.meta.url));
+  const child = spawn(process.execPath, [script], {
+    env: { ...process.env, SPORTS_DATA_DIR: dir },
+    stdio: ['ignore', 'ignore', 'inherit'],
+  });
+  const exited = new Promise((resolve) => child.on('exit', resolve));
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(await readFile(join(dir, 'hrSensor.json'), 'utf-8'), 'not json');
+
+  await rm(join(dir, 'hrSensor.lock'));
+  assert.equal(await exited, 0);
+  const map = JSON.parse(await readFile(join(dir, 'hrSensor.json'), 'utf-8'));
+  assert.equal(map['1'].label, 'chest-strap');
+});
