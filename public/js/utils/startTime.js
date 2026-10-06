@@ -97,27 +97,36 @@ export function compareStart(a, b) {
   return kb - ka;
 }
 
+/**
+ * The local time an exercise started at, read as if it were UTC as
+ * `wallClock` is: its local time when known, else its instant in the
+ * browser's zone. Null without a start. Read it back with the `getUTC…`
+ * methods, or format it with `timeZone: 'UTC'`.
+ *
+ * @param {Exercise} ex
+ * @returns {number | null}
+ */
+export function localStart(ex) {
+  const { instant, wallClock } = startOf(ex);
+  if (wallClock !== null) return wallClock;
+  if (instant === null) return null;
+  return instant - new Date(instant).getTimezoneOffset() * 60 * 1000;
+}
+
 /** @typedef {{ year: number, month: number, day: number }} LocalDay */
 
 /**
- * The calendar day an exercise started on, `month` 0–11 as `Date` counts it:
- * its local time when known, else its instant in the browser's zone. Null
- * without a start.
+ * The calendar day an exercise started on, `month` 0–11 as `Date` counts it,
+ * read through `localStart`. Null without a start.
  *
  * @param {Exercise} ex
  * @returns {LocalDay | null}
  */
 export function localDay(ex) {
-  const { instant, wallClock } = startOf(ex);
-  if (wallClock !== null) {
-    const d = new Date(wallClock);
-    return { year: d.getUTCFullYear(), month: d.getUTCMonth(), day: d.getUTCDate() };
-  }
-  if (instant !== null) {
-    const d = new Date(instant);
-    return { year: d.getFullYear(), month: d.getMonth(), day: d.getDate() };
-  }
-  return null;
+  const local = localStart(ex);
+  if (local === null) return null;
+  const d = new Date(local);
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth(), day: d.getUTCDate() };
 }
 
 /**
