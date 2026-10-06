@@ -254,7 +254,12 @@ export async function readSensorCache(): Promise<SensorMap> {
  * rebuilds it from the cached TCX files, which also mends an unreadable one.
  */
 export async function writeSensorCache(map: SensorMap): Promise<void> {
-  await writes.run(() => writeFileAtomic(CACHE_PATH, JSON.stringify(map, null, 2)));
+  await writes.run(() => writeMap(map));
+}
+
+/** Write the map through `writeFileAtomic`; callers hold the lock. */
+async function writeMap(map: SensorMap): Promise<void> {
+  await writeFileAtomic(CACHE_PATH, JSON.stringify(map, null, 2));
 }
 
 /**
@@ -269,7 +274,7 @@ export async function recordHrSensor(exerciseId: string, xml: string): Promise<H
   await writes.run(async () => {
     const map = await readSensorCache();
     map[exerciseId] = result;
-    await writeFileAtomic(CACHE_PATH, JSON.stringify(map, null, 2));
+    await writeMap(map);
   });
   return result;
 }

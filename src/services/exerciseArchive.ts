@@ -13,7 +13,7 @@ import type { XmlType } from './xmlCache.ts';
 import { readSensorCache, recordHrSensor } from './hrSensor.ts';
 import type { SensorMap } from './hrSensor.ts';
 
-export { CorruptCacheError } from './exerciseCache.ts';
+export { CorruptCacheError } from './atomicFile.ts';
 export { isXmlType } from './xmlCache.ts';
 export type { XmlType } from './xmlCache.ts';
 
