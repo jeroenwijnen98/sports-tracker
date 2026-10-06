@@ -61,6 +61,13 @@ export function periodData(mode, exercises, now) {
  */
 const dayNumber = (year, month, day) => Date.UTC(year, month, day);
 
+/**
+ * @param {number} year
+ * @param {number} month
+ * @returns {string}
+ */
+const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, '0')}`;
+
 /** @type {(ex: Exercise) => number} */
 const km = (ex) => (ex.distance || 0) / 1000;
 
@@ -70,7 +77,8 @@ const km = (ex) => (ex.distance || 0) / 1000;
  * @returns {PeriodData}
  */
 function buildWeekData(dated, now) {
-  const diff = now.getDay() === 0 ? -6 : 1 - now.getDay();
+  const weekday = now.getDay();
+  const diff = weekday === 0 ? -6 : 1 - weekday;
   const monday = dayNumber(now.getFullYear(), now.getMonth(), now.getDate() + diff);
   const sunday = monday + 6 * DAY_MS;
 
@@ -145,13 +153,6 @@ function buildYearData(dated, now) {
 
   return { filtered, bars, periodLabel };
 }
-
-/**
- * @param {number} year
- * @param {number} month
- * @returns {string}
- */
-const monthKey = (year, month) => `${year}-${String(month + 1).padStart(2, '0')}`;
 
 /**
  * @param {Dated[]} dated
