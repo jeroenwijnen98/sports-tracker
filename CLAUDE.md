@@ -111,7 +111,7 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `src/services/polarAuth.ts` — OAuth token exchange with Basic auth, user registration
 - `src/services/tokenStore.ts` — Reads/writes `src/data/token.json` (gitignored)
 - `src/services/xmlCache.ts` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
-- `src/services/exerciseCache.ts` — Server-side exercise JSON cache (`src/data/exercises.json`). Deleting an exercise removes it here and records its id in `src/data/deletedExercises.json`, which `syncFromPolar()` skips so the Training Data API cannot bring it back; its TCX/GPX and sensor entry stay on disk
+- `src/services/exerciseCache.ts` — Server-side exercise JSON cache (`src/data/exercises.json`). Deleting an exercise removes it here and records its id in `src/data/deletedExercises.json`, which `syncFromPolar()` skips so the Training Data API cannot bring it back; its TCX/GPX and sensor entry stay on disk. Both files fail loud: a missing one reads as empty, one that does not parse throws `CorruptCacheError` and is never overwritten (`syncFromPolar()` reads both before opening a transaction, and `/api/exercises` answers 500). Every write goes through a temporary file in the same directory and a rename
 - `src/services/hrSensor.ts` — Infers chest strap vs. wrist heart rate sensor from TCX signal texture, cached in `src/data/hrSensor.json`
 
 **Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler. The `.js` is served as it is and type-checked through JSDoc against `types/domain.ts`.

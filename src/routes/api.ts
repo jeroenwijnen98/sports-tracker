@@ -4,7 +4,7 @@ import express from 'express';
 import { tokenCheck } from '../middleware/tokenCheck.ts';
 import { polarRequest, withToken, XML_ACCEPT } from '../services/polarApi.ts';
 import { syncFromPolar } from '../services/polarSync.ts';
-import { readCache, removeFromCache } from '../services/exerciseCache.ts';
+import { readCache, removeFromCache, CorruptCacheError } from '../services/exerciseCache.ts';
 import { readXmlCache, writeXmlCache, isXmlType } from '../services/xmlCache.ts';
 import { withHrSensor } from '../services/hrSensor.ts';
 import { importExercise, diskImportStore } from '../services/importExercise.ts';
@@ -25,6 +25,11 @@ router.get('/exercises', async (req, res) => {
     res.json(await withHrSensor(all));
   } catch (err) {
     console.error('Exercises fetch error:', (err as Error).message);
+    // An unreadable cache is this server's fault, not Polar's
+    if (err instanceof CorruptCacheError) {
+      res.status(500).json({ error: 'Opgeslagen activiteiten onleesbaar' });
+      return;
+    }
     res.status(502).json({ error: 'Failed to fetch exercises from Polar' });
   }
 });

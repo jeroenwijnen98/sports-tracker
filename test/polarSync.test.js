@@ -115,3 +115,18 @@ test('a failing Training Data API is only logged', async () => {
 
   assert.deepEqual(result, { fromTransaction: 1, fromTrainingApi: 0, added: 1, failed: [] });
 });
+
+for (const file of ['exercises.json', 'deletedExercises.json']) {
+  test(`an unreadable ${file} fails the sync before a transaction is opened`, async () => {
+    await writeFile(join(dir, file), '[{"id": "1"');
+    /** @type {string[]} */
+    const log = [];
+
+    await assert.rejects(
+      sync.syncFromPolar({ request: fakePolar({ transaction: [exercise('2')], trainingApi: [exercise('3')], log }), userId: 42 }),
+      { name: 'CorruptCacheError' },
+    );
+    assert.deepEqual(log, []);
+    assert.equal(await readFile(join(dir, file), 'utf-8'), '[{"id": "1"');
+  });
+}

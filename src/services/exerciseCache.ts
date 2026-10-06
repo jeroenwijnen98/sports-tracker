@@ -1,23 +1,65 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile, writeFile, mkdir, rename, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { basename, dirname, join } from 'node:path';
 import type { Exercise } from '../../types/domain.ts';
 import { DATA_DIR } from '../config.ts';
 
 const CACHE_PATH = join(DATA_DIR, 'exercises.json');
 const DELETED_PATH = join(DATA_DIR, 'deletedExercises.json');
 
-export async function readCache(): Promise<Exercise[]> {
-  try {
-    const data = await readFile(CACHE_PATH, 'utf-8');
-    return JSON.parse(data);
-  } catch {
-    return [];
+/**
+ * A cache file that exists but cannot be read as a JSON array. Thrown rather
+ * than read as empty, so no caller overwrites the record with less than it
+ * held.
+ */
+export class CorruptCacheError extends Error {
+  constructor(path: string, reason: string) {
+    super(`${basename(path)} is unreadable (${reason}); left on disk untouched`);
+    this.name = 'CorruptCacheError';
   }
 }
 
+/** A JSON array file: missing reads as empty, anything unparseable throws. */
+async function readJsonArray<T>(path: string): Promise<T[]> {
+  let data: string;
+  try {
+    data = await readFile(path, 'utf-8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw err;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch (err) {
+    throw new CorruptCacheError(path, (err as Error).message);
+  }
+  if (!Array.isArray(parsed)) throw new CorruptCacheError(path, 'not an array');
+  return parsed;
+}
+
+/**
+ * Write through a temporary file in the same directory, then rename it into
+ * place: a write cut off mid-way leaves the old file, never half of a new one.
+ */
+async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const tmp = `${path}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(tmp, JSON.stringify(value, null, 2));
+    await rename(tmp, path);
+  } catch (err) {
+    await rm(tmp, { force: true });
+    throw err;
+  }
+}
+
+export async function readCache(): Promise<Exercise[]> {
+  return readJsonArray<Exercise>(CACHE_PATH);
+}
+
 export async function writeCache(exercises: Exercise[]): Promise<void> {
-  await mkdir(dirname(CACHE_PATH), { recursive: true });
-  await writeFile(CACHE_PATH, JSON.stringify(exercises, null, 2));
+  await writeJsonAtomic(CACHE_PATH, exercises);
 }
 
 /**
@@ -49,24 +91,24 @@ export async function revertAppend(id: string): Promise<void> {
  * does not bring it back from the Training Data API. Its TCX/GPX and heart
  * rate sensor entry are kept: they cannot be fetched again.
  * Returns false when the id was not cached.
+ *
+ * Both files are read before either is written, so an unreadable one leaves
+ * both untouched. The deleted id is written first: should the cache write then
+ * fail, the exercise is still listed but no sync can bring it back.
  */
 export async function removeFromCache(id: string): Promise<boolean> {
   const existing = await readCache();
+  const deleted = await readDeletedIds();
   const remaining = existing.filter((e) => String(e.id) !== String(id));
   if (remaining.length === existing.length) return false;
 
-  await writeCache(remaining);
-  const deleted = await readDeletedIds();
   deleted.add(String(id));
-  await writeFile(DELETED_PATH, JSON.stringify([...deleted], null, 2));
+  await writeJsonAtomic(DELETED_PATH, [...deleted]);
+  await writeCache(remaining);
   return true;
 }
 
 /** Ids of exercises deleted by the user, as strings. */
 export async function readDeletedIds(): Promise<Set<string>> {
-  try {
-    return new Set<string>(JSON.parse(await readFile(DELETED_PATH, 'utf-8')));
-  } catch {
-    return new Set<string>();
-  }
+  return new Set((await readJsonArray<unknown>(DELETED_PATH)).map(String));
 }

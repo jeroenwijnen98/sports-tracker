@@ -1,6 +1,6 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -44,4 +44,55 @@ test('removeFromCache remembers the deleted id', async () => {
 
   assert.deepEqual((await cache.readCache()).map((e) => e.id), ['1', '3']);
   assert.deepEqual([...(await cache.readDeletedIds())], ['2']);
+});
+
+test('every write goes through a temporary file that is gone afterwards', async () => {
+  await cache.appendToCache([exercise('4')]);
+  await cache.removeFromCache('4');
+  await cache.revertAppend('3');
+
+  assert.deepEqual((await readdir(dir)).sort(), ['deletedExercises.json', 'exercises.json']);
+});
+
+test('a missing cache or deleted-exercise list reads as empty', async () => {
+  await rm(join(dir, 'exercises.json'));
+  await rm(join(dir, 'deletedExercises.json'));
+
+  assert.deepEqual(await cache.readCache(), []);
+  assert.deepEqual([...(await cache.readDeletedIds())], []);
+});
+
+/**
+ * Write `files` (name -> contents) into the data directory, run `act`, and
+ * check every file still holds exactly what was written.
+ * @param {Record<string, string>} files
+ * @param {() => Promise<unknown>} act
+ */
+async function assertUntouched(files, act) {
+  for (const [name, contents] of Object.entries(files)) await writeFile(join(dir, name), contents);
+  await assert.rejects(act, cache.CorruptCacheError);
+  for (const [name, contents] of Object.entries(files)) {
+    assert.equal(await readFile(join(dir, name), 'utf-8'), contents);
+  }
+}
+
+const valid = JSON.stringify([exercise('1')]);
+const truncated = valid.slice(0, 40);
+
+test('a truncated cache makes append, revert and remove throw and stays as it was', async () => {
+  const files = { 'exercises.json': truncated, 'deletedExercises.json': '[]' };
+  await assertUntouched(files, () => cache.readCache());
+  await assertUntouched(files, () => cache.appendToCache([exercise('2')]));
+  await assertUntouched(files, () => cache.revertAppend('1'));
+  await assertUntouched(files, () => cache.removeFromCache('1'));
+});
+
+test('a cache that parses to something other than an array throws', async () => {
+  await assertUntouched({ 'exercises.json': '{}' }, () => cache.appendToCache([exercise('2')]));
+});
+
+test('an unparseable deleted-exercise list throws, and a remove touches neither file', async () => {
+  const files = { 'exercises.json': valid, 'deletedExercises.json': '["1", ' };
+  await assertUntouched(files, () => cache.readDeletedIds());
+  await assertUntouched(files, () => cache.removeFromCache('1'));
 });

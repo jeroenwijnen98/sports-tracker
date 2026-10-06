@@ -32,12 +32,17 @@ export interface SyncResult {
  * it for the transaction), or the Training Data API would hand a recent one
  * straight back.
  *
+ * Both files are read before the transaction is opened: an unreadable cache
+ * or deleted-exercise list throws here, so the sync fails with nothing
+ * consumed and nothing overwritten.
+ *
  * `request` is `polarRequest` with the token bound (`withToken`).
  */
 export async function syncFromPolar(
   { request, userId }: { request: PolarRequest; userId: number },
 ): Promise<SyncResult> {
   const before = (await readCache()).length;
+  const deletedIds = await readDeletedIds();
   const { secured, failed } = await consumeTransaction({ request, store: diskStore, userId });
   let added = (await readCache()).length - before;
 
@@ -45,7 +50,6 @@ export async function syncFromPolar(
   try {
     const trainingExercises: Exercise[] = await (await request('/exercises')).json();
     fromTrainingApi = trainingExercises.length;
-    const deletedIds = await readDeletedIds();
     const notDeleted = trainingExercises.filter((e) => !deletedIds.has(String(e.id)));
     const addedFromTrainingApi = await appendToCache(notDeleted);
     if (addedFromTrainingApi > 0) {
