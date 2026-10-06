@@ -1,3 +1,11 @@
+/**
+ * The exercise archive: everything the server keeps in `src/data`, the
+ * permanent record once a transaction is committed. Sync, import and the
+ * routes reach the exercise cache, the XML cache and the heart rate sensor map
+ * only through here, so the deleted rule and the heart rate sensor join each
+ * live in one place.
+ */
+
 import type { Exercise, HeartRateSensor } from '../../types/domain.ts';
 import { appendToCache, readCache, readDeletedIds, removeFromCache, revertAppend } from './exerciseCache.ts';
 import { readXmlCache, writeXmlCache } from './xmlCache.ts';
@@ -14,14 +22,6 @@ export type { XmlType } from './xmlCache.ts';
  * brings it back.
  */
 export type ArchiveSource = 'transaction' | 'training-api' | 'import';
-
-/**
- * The exercise archive: everything the server keeps in `src/data`, the
- * permanent record once a transaction is committed. Sync, import and the
- * routes reach the exercise cache, the XML cache and the heart rate sensor map
- * only through here, so the deleted rule and the heart rate sensor join each
- * live in one place.
- */
 
 /**
  * Add exercises not stored yet. For a Polar source, an exercise the user
