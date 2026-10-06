@@ -3,9 +3,17 @@ import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import type { Exercise } from '../../types/domain.ts';
 import { DATA_DIR } from '../config.ts';
+import { createWriteLock } from './writeLock.ts';
 
 const CACHE_PATH = join(DATA_DIR, 'exercises.json');
 const DELETED_PATH = join(DATA_DIR, 'deletedExercises.json');
+
+/**
+ * Every read-modify-write of either file runs through this, one at a time in
+ * this process and never at the same time as `scripts/sync.ts` or the server
+ * in another: two interleaved cycles would drop one side's exercises.
+ */
+const writes = createWriteLock(join(DATA_DIR, 'exercises.lock'));
 
 /**
  * A cache file that exists but cannot be read as a JSON array. Thrown rather
@@ -58,8 +66,9 @@ export async function readCache(): Promise<Exercise[]> {
   return readJsonArray<Exercise>(CACHE_PATH);
 }
 
+/** Replace the whole cache. */
 export async function writeCache(exercises: Exercise[]): Promise<void> {
-  await writeJsonAtomic(CACHE_PATH, exercises);
+  await writes.run(() => writeJsonAtomic(CACHE_PATH, exercises));
 }
 
 /**
@@ -67,13 +76,15 @@ export async function writeCache(exercises: Exercise[]): Promise<void> {
  * Returns the count of newly added exercises.
  */
 export async function appendToCache(newExercises: Exercise[]): Promise<number> {
-  const existing = await readCache();
-  const existingIds = new Set(existing.map((e) => e.id));
-  const unique = newExercises.filter((e) => !existingIds.has(e.id));
-  if (unique.length > 0) {
-    await writeCache([...existing, ...unique]);
-  }
-  return unique.length;
+  return writes.run(async () => {
+    const existing = await readCache();
+    const existingIds = new Set(existing.map((e) => e.id));
+    const unique = newExercises.filter((e) => !existingIds.has(e.id));
+    if (unique.length > 0) {
+      await writeJsonAtomic(CACHE_PATH, [...existing, ...unique]);
+    }
+    return unique.length;
+  });
 }
 
 /**
@@ -81,9 +92,11 @@ export async function appendToCache(newExercises: Exercise[]): Promise<number> {
  * as deleted: for an import whose TCX could not be written after all.
  */
 export async function revertAppend(id: string): Promise<void> {
-  const existing = await readCache();
-  const remaining = existing.filter((e) => e.id !== id);
-  if (remaining.length < existing.length) await writeCache(remaining);
+  await writes.run(async () => {
+    const existing = await readCache();
+    const remaining = existing.filter((e) => e.id !== id);
+    if (remaining.length < existing.length) await writeJsonAtomic(CACHE_PATH, remaining);
+  });
 }
 
 /**
@@ -97,15 +110,17 @@ export async function revertAppend(id: string): Promise<void> {
  * fail, the exercise is still listed but no sync can bring it back.
  */
 export async function removeFromCache(id: string): Promise<boolean> {
-  const existing = await readCache();
-  const deleted = await readDeletedIds();
-  const remaining = existing.filter((e) => String(e.id) !== String(id));
-  if (remaining.length === existing.length) return false;
+  return writes.run(async () => {
+    const existing = await readCache();
+    const deleted = await readDeletedIds();
+    const remaining = existing.filter((e) => String(e.id) !== String(id));
+    if (remaining.length === existing.length) return false;
 
-  deleted.add(String(id));
-  await writeJsonAtomic(DELETED_PATH, [...deleted]);
-  await writeCache(remaining);
-  return true;
+    deleted.add(String(id));
+    await writeJsonAtomic(DELETED_PATH, [...deleted]);
+    await writeJsonAtomic(CACHE_PATH, remaining);
+    return true;
+  });
 }
 
 /** Ids of exercises deleted by the user, as strings. */

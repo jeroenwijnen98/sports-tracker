@@ -82,7 +82,7 @@ npm test                # node --test 'test/**/*.test.js'
 
 Zero dependencies: Node's built-in test runner, no `.env` or `src/data` needed.
 The tests cover pure logic only (import converters, overlap, start time, exercise identity, intake, the import pipeline (`importFiles` against fake files and adapters) with its device map and import toast, shoe totals, the default shoe rule, detail data loading, the detail view's current-run ticket, the detail chart series,
-heart rate sensor classifier, formatters, running sports, HTML escaping), the transaction consumer and `syncFromPolar()` against a fake `request`, `importExercise()` against an in-memory store, plus the exercise cache against a temp directory — no
+heart rate sensor classifier, formatters, running sports, HTML escaping), the transaction consumer and `syncFromPolar()` against a fake `request`, `importExercise()` against an in-memory store, plus the exercise cache (including concurrent writes from this process and a child process) and the write lock against a temp directory — no
 browser, no Polar API. Frontend modules in `public/js/utils/` are imported
 straight into Node, so keep them free of DOM access.
 
@@ -111,7 +111,8 @@ their `smoothness` and `label`, so update it when recalibrating.
 - `src/services/polarAuth.ts` — OAuth token exchange with Basic auth, user registration
 - `src/services/tokenStore.ts` — Reads/writes `src/data/token.json` (gitignored)
 - `src/services/xmlCache.ts` — Server-side file cache for TCX/GPX XML in `src/data/tcx/` and `src/data/gpx/`
-- `src/services/exerciseCache.ts` — Server-side exercise JSON cache (`src/data/exercises.json`). Deleting an exercise removes it here and records its id in `src/data/deletedExercises.json`, which `syncFromPolar()` skips so the Training Data API cannot bring it back; its TCX/GPX and sensor entry stay on disk. Both files fail loud: a missing one reads as empty, one that does not parse throws `CorruptCacheError` and is never overwritten (`syncFromPolar()` reads both before opening a transaction, and `/api/exercises` answers 500). Every write goes through a temporary file in the same directory and a rename
+- `src/services/exerciseCache.ts` — Server-side exercise JSON cache (`src/data/exercises.json`). Deleting an exercise removes it here and records its id in `src/data/deletedExercises.json`, which `syncFromPolar()` skips so the Training Data API cannot bring it back; its TCX/GPX and sensor entry stay on disk. Both files fail loud: a missing one reads as empty, one that does not parse throws `CorruptCacheError` and is never overwritten (`syncFromPolar()` reads both before opening a transaction, and `/api/exercises` answers 500). Every write goes through a temporary file in the same directory and a rename. Every append, revert and remove runs through one write queue and holds `src/data/exercises.lock` while it reads and writes, so concurrent calls in the server and `scripts/sync.ts` in its own process cannot drop each other's exercises
+- `src/services/writeLock.ts` — `createWriteLock(path) → { run(write) }`: an in-process queue plus an exclusive lock file holding the writer's pid. A writer that finds it held waits up to 10 s, then throws `LockTimeoutError`; a lock whose process no longer runs is stale and taken over. The queue and the lock are released when `write` throws
 - `src/services/hrSensor.ts` — Infers chest strap vs. wrist heart rate sensor from TCX signal texture, cached in `src/data/hrSensor.json`
 
 **Frontend (public/):** Vanilla HTML/CSS/JS with ES modules, no bundler. The `.js` is served as it is and type-checked through JSDoc against `types/domain.ts`.
@@ -177,7 +178,7 @@ Checked against the AccessLink v3 reference (polar.com/accesslink-api, "Exercise
 - IndexedDB key paths cannot contain hyphens. Polar API returns fields like `start-time` and `detailed-sport-info` — access these with bracket notation, never use them as IndexedDB indexes
 - Polar's exercise transaction returns 204 when there's no new data. A committed transaction's data won't appear again — always rely on locally cached exercises
 - **Never use `/v3/exercises/{id}/tcx` during a transaction** — that's the Training Data API endpoint. During a transaction, use `{exerciseUrl}/tcx` where `exerciseUrl` is the full transaction URL like `https://www.polaraccesslink.com/v3/users/{userId}/exercise-transactions/{transactionId}/exercises/{exerciseId}`
-- The `src/data/` directory is gitignored (contains `token.json`, `exercises.json`, `deletedExercises.json`, `hrSensor.json`, `tcx/`, `gpx/`)
+- The `src/data/` directory is gitignored (contains `token.json`, `exercises.json`, `deletedExercises.json`, `exercises.lock` while a write runs, `hrSensor.json`, `tcx/`, `gpx/`)
 - Polar's `device` / `device-id` name the **recording** device, not the heart rate source. A Pacer run with a paired H10 and one on wrist optical are labelled identically, and `SensorState` in the TCX is `Present` in all but 8 of 111k samples — it carries no information
 - Leaflet is loaded dynamically from CDN only when GPS data exists in the exercise
 - Frontend caches parsed detail data in its own `details` IndexedDB store, keyed by exercise id, never on the exercise record. An `{ id, unavailable: true, checkedAt }` entry with a TTL prevents repeated fetches for exercises without detail data
