@@ -183,7 +183,7 @@ test('XML already cached is not fetched again', async () => {
   assert.equal(await cachedXml('tcx', '15'), '<tcx kept/>');
 });
 
-test('an exercise already in the cache is not fetched by the top-up', async () => {
+test('an exercise the transaction secured is not fetched again by the top-up', async () => {
   /** @type {string[]} */
   const log = [];
   await sync.syncFromPolar({
@@ -192,6 +192,82 @@ test('an exercise already in the cache is not fetched by the top-up', async () =
   });
 
   assert.ok(!log.some((l) => l.startsWith('GET /exercises/16')));
+});
+
+/** @type {(exercises: Exercise[]) => Promise<void>} */
+async function cache(exercises) {
+  await writeFile(join(dir, 'exercises.json'), JSON.stringify(exercises));
+}
+
+test('a cached exercise without XML on disk is backfilled while the Training Data API lists it', async () => {
+  await cache([exercise('20', true), exercise('21')]);
+  /** @type {string[]} */
+  const log = [];
+  const result = await sync.syncFromPolar({
+    request: fakePolar({ trainingApi: [exercise('20', true), exercise('21')], log }),
+    userId: 42,
+  });
+
+  assert.deepEqual(result.failed, []);
+  assert.equal(result.added, 0);
+  assert.equal(await cachedXml('tcx', '20'), '<tcx id="20"/>');
+  assert.equal(await cachedXml('gpx', '20'), '<gpx id="20"/>');
+  assert.equal(await cachedXml('tcx', '21'), '<tcx id="21"/>');
+  assert.ok(!log.includes('GET /exercises/21/gpx'));
+});
+
+test('a cached exercise the Training Data API no longer lists is not fetched', async () => {
+  await cache([exercise('22', true)]);
+  /** @type {string[]} */
+  const log = [];
+  const result = await sync.syncFromPolar({
+    request: fakePolar({ trainingApi: [], log }),
+    userId: 42,
+  });
+
+  assert.deepEqual(result.failed, []);
+  assert.ok(!log.some((l) => l.includes('/exercises/22')));
+});
+
+test('a cached exercise with its XML on disk is not fetched again, a deleted one not at all', async () => {
+  await cache([exercise('23', true)]);
+  await mkdir(join(dir, 'tcx'), { recursive: true });
+  await mkdir(join(dir, 'gpx'), { recursive: true });
+  await writeFile(join(dir, 'tcx', '23.xml'), '<tcx kept/>');
+  await writeFile(join(dir, 'gpx', '23.xml'), '<gpx kept/>');
+  // Deleting an exercise removes it from the cache and records its id
+  await writeFile(join(dir, 'deletedExercises.json'), JSON.stringify(['24']));
+  /** @type {string[]} */
+  const log = [];
+  const result = await sync.syncFromPolar({
+    request: fakePolar({ trainingApi: [exercise('23', true), exercise('24', true)], log }),
+    userId: 42,
+  });
+
+  assert.deepEqual(result.failed, []);
+  assert.ok(!log.some((l) => l.includes('/exercises/23') || l.includes('/exercises/24')));
+  assert.equal(await cachedXml('tcx', '23'), '<tcx kept/>');
+  assert.equal(await cachedXml('tcx', '24'), null);
+});
+
+test('a failed backfill fetch is reported and the sync goes on', async () => {
+  await cache([exercise('25'), exercise('26')]);
+  /** @type {string[]} */
+  const log = [];
+  const result = await sync.syncFromPolar({
+    request: fakePolar({
+      transaction: [exercise('27')],
+      trainingApi: [exercise('25'), exercise('26')],
+      failing: ['/exercises/25/tcx'],
+      log,
+    }),
+    userId: 42,
+  });
+
+  assert.deepEqual(result.failed, ['/exercises/25/tcx']);
+  assert.equal(await cachedXml('tcx', '26'), '<tcx id="26"/>');
+  assert.equal(result.fromTransaction, 1);
+  assert.ok(log.includes(`PUT ${LIST}`));
 });
 
 for (const file of ['exercises.json', 'deletedExercises.json']) {

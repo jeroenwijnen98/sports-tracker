@@ -14,8 +14,8 @@ export interface SyncResult {
    * Every fetch the sync could not secure. A full transaction URL (the list,
    * an exercise, or its `/tcx` or `/gpx`) means the transaction was left open.
    * A Training Data API path (`/exercises/{id}/tcx` or `/gpx`) is detail data
-   * of an exercise the top-up added: its JSON is cached all the same, and it
-   * does not hold the transaction open.
+   * of an exercise the top-up added or backfilled: its JSON is cached all the
+   * same, and it does not hold the transaction open.
    */
   failed: string[];
 }
@@ -30,9 +30,11 @@ export interface SyncResult {
  *    sport filter lives on the frontend; filtering here would lose the others
  *    for good.
  * 2. Training Data API — tops up exercises the transaction did not hand over,
- *    and secures their TCX/GPX (`secureDetailData`), which it serves for 30
- *    days only. A failed list is logged, not thrown: the transaction's
- *    exercises are already on disk.
+ *    and secures the TCX/GPX (`secureDetailData`) of every exercise it lists,
+ *    which it serves for 30 days only. That also backfills a cached exercise
+ *    whose XML never reached disk; one the API no longer lists is past its
+ *    30 days and is not attempted. A failed list is logged, not thrown: the
+ *    transaction's exercises are already on disk.
  *
  * Exercises the user deleted are skipped from both sources (`diskStore` does
  * it for the transaction), or the Training Data API would hand a recent one
@@ -56,16 +58,17 @@ export async function syncFromPolar(
   try {
     const trainingExercises: Exercise[] = await (await request('/exercises')).json();
     fromTrainingApi = trainingExercises.length;
+    const listed = trainingExercises.filter((e) => !deletedIds.has(String(e.id)));
     const cachedIds = new Set((await readCache()).map((e) => String(e.id)));
-    const newExercises = trainingExercises.filter(
-      (e) => !deletedIds.has(String(e.id)) && !cachedIds.has(String(e.id)),
-    );
+    const newExercises = listed.filter((e) => !cachedIds.has(String(e.id)));
     const addedFromTrainingApi = await appendToCache(newExercises);
     if (addedFromTrainingApi > 0) {
       console.log(`[Polar] Added ${addedFromTrainingApi} exercises from Training Data API`);
     }
     added += addedFromTrainingApi;
-    failed.push(...await secureDetailData(request, newExercises));
+    // Every listed exercise, not only the new ones: one already cached whose
+    // TCX/GPX never reached disk is backfilled while Polar still serves it
+    failed.push(...await secureDetailData(request, listed));
   } catch (err) {
     console.log('[Polar] Training Data API unavailable:', (err as Error).message);
   }
