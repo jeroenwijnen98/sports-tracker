@@ -66,11 +66,6 @@ export async function readCache(): Promise<Exercise[]> {
   return readJsonArray<Exercise>(CACHE_PATH);
 }
 
-/** Replace the whole cache. */
-export async function writeCache(exercises: Exercise[]): Promise<void> {
-  await writes.run(() => writeJsonAtomic(CACHE_PATH, exercises));
-}
-
 /**
  * Append new exercises to cache, skipping duplicates by id.
  * Returns the count of newly added exercises.

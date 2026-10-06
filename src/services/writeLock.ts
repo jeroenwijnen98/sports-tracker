@@ -75,7 +75,7 @@ export function createWriteLock(path: string, options: WriteLockOptions = {}): W
         return { cleared: false, holder };
       }
     } catch (err) {
-      // Released between our create and our read: try again at once
+      // Released between our failed create and this read: try again at once
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return { cleared: true, holder: null };
       throw err;
     }
