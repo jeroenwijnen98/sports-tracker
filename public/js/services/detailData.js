@@ -2,8 +2,7 @@
 
 import { get, put, del } from '../db.js';
 import { getExerciseTcx, getExerciseGpx } from '../api.js';
-import { parseTcx } from '../utils/tcxParser.js';
-import { parseGpx } from '../utils/gpxParser.js';
+import { readDetail } from '../utils/detailReader.js';
 
 /** @typedef {import('../../../types/domain.ts').DetailData} DetailData */
 /** @typedef {import('../db.js').DetailsEntry} DetailsEntry */
@@ -20,10 +19,10 @@ import { parseGpx } from '../utils/gpxParser.js';
 /**
  * @typedef {object} DetailLoaderDeps
  * @property {DetailsStore} store
- * @property {(id: string) => Promise<DetailData | null>} fetchTcx Fetched
- *   and parsed, or null when there is none.
- * @property {(id: string) => Promise<Pick<DetailData, 'route' | 'hasGps'> | null>} fetchGpx
- *   Fetched and parsed, or null when there is none.
+ * @property {(id: string) => Promise<string | null>} fetchTcx The TCX, or
+ *   null when there is none.
+ * @property {(id: string) => Promise<string | null>} fetchGpx The GPX, or
+ *   null when there is none.
  * @property {() => number} [now]
  */
 
@@ -45,17 +44,10 @@ export function createDetailLoader({ store, fetchTcx, fetchGpx, now = Date.now }
    * @returns {Promise<DetailData | null>}
    */
   async function fetchAndStore(id) {
+    // GPX only when there is no TCX: it has the route only
     const tcx = await fetchTcx(id);
-    if (tcx) {
-      await store.put({ id, detail: tcx });
-      return tcx;
-    }
-
-    // Fallback: GPX has the route only
-    const gpx = await fetchGpx(id);
-    if (gpx) {
-      /** @type {DetailData} */
-      const detail = { ...gpx, laps: [], allTrackpoints: [], hasHeartRate: false, hasSpeed: false };
+    const detail = readDetail({ tcx, gpx: tcx ? null : await fetchGpx(id) });
+    if (detail) {
       await store.put({ id, detail });
       return detail;
     }
@@ -115,12 +107,6 @@ export const { load, forget } = createDetailLoader({
     put: (entry) => put('details', entry),
     delete: (id) => del('details', id),
   },
-  fetchTcx: async (id) => {
-    const xml = await getExerciseTcx(id);
-    return xml ? parseTcx(xml) : null;
-  },
-  fetchGpx: async (id) => {
-    const xml = await getExerciseGpx(id);
-    return xml ? parseGpx(xml) : null;
-  },
+  fetchTcx: getExerciseTcx,
+  fetchGpx: getExerciseGpx,
 });

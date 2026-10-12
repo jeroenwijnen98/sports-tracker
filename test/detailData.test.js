@@ -2,20 +2,22 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDetailLoader, RETRY_AFTER_MS } from '../public/js/services/detailData.js';
 import { splitDetailData } from '../public/js/db.js';
+import { readDetail } from '../public/js/utils/detailReader.js';
 
 /** @typedef {import('../types/domain.ts').DetailData} DetailData */
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
 /** @typedef {import('../public/js/db.js').DetailsEntry} DetailsEntry */
 
-/** @type {DetailData} */
-const parsed = {
-  laps: [{ index: 1, duration: 600, distance: 2000, avgHR: 150, maxHR: 160 }],
-  allTrackpoints: [],
-  route: [[52.1, 5.1]],
-  hasGps: true,
-  hasHeartRate: true,
-  hasSpeed: true,
-};
+const TCX = `<TrainingCenterDatabase><Activities><Activity><Lap>
+  <TotalTimeSeconds>600</TotalTimeSeconds><DistanceMeters>2000</DistanceMeters>
+  <AverageHeartRateBpm><Value>150</Value></AverageHeartRateBpm>
+  <MaximumHeartRateBpm><Value>160</Value></MaximumHeartRateBpm>
+</Lap></Activity></Activities></TrainingCenterDatabase>`;
+
+const GPX = '<gpx><trk><trkseg><trkpt lat="1" lon="2"/></trkseg></trk></gpx>';
+
+/** What the loader gives back for `TCX`. */
+const parsed = /** @type {DetailData} */ (readDetail({ tcx: TCX }));
 
 /** @type {Exercise} */
 const exercise = {
@@ -29,9 +31,9 @@ const exercise = {
  * An in-memory IndexedDB with the exercises and details stores, a clock and
  * counting fetchers. `tcx` and `gpx` say what the server has.
  *
- * @param {{ tcx?: DetailData | null, gpx?: Pick<DetailData, 'route' | 'hasGps'> | null, entries?: DetailsEntry[] }} [options]
+ * @param {{ tcx?: string | null, gpx?: string | null, entries?: DetailsEntry[] }} [options]
  */
-function setup({ tcx = parsed, gpx = null, entries = [] } = {}) {
+function setup({ tcx = TCX, gpx = null, entries = [] } = {}) {
   const db = {
     /** @type {Map<string, Exercise>} */
     exercises: new Map([[exercise.id, exercise]]),
@@ -107,13 +109,13 @@ test('two concurrent loads of the same id make one TCX fetch', async () => {
 });
 
 test('GPX is not fetched when there is a TCX', async () => {
-  const { load, calls } = setup({ gpx: { route: [[1, 2]], hasGps: true } });
+  const { load, calls } = setup({ gpx: GPX });
   await load('a');
   assert.deepEqual(calls, { tcx: 1, gpx: 0 });
 });
 
 test('without a TCX the GPX route is used', async () => {
-  const { load, calls } = setup({ tcx: null, gpx: { route: [[1, 2]], hasGps: true } });
+  const { load, calls } = setup({ tcx: null, gpx: GPX });
   assert.deepEqual(await load('a'), {
     route: [[1, 2]], hasGps: true, laps: [], allTrackpoints: [], hasHeartRate: false, hasSpeed: false,
   });
