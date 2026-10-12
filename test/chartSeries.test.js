@@ -26,6 +26,7 @@ function trackpoints(count, { speedAt = () => 3, hr = 150, withSpeed = true } = 
       heartRate: hr,
       speed: withSpeed ? speedAt(i) : null,
       distance,
+      cadence: null,
     });
   }
   return points;

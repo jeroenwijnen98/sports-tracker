@@ -62,6 +62,7 @@ function readTcx(xml) {
         heartRate: number(text(child(child(tp, 'HeartRateBpm'), 'Value'))),
         speed: speedOf(tp),
         distance: number(text(child(tp, 'DistanceMeters'))),
+        cadence: number(text(child(tp, 'Cadence'))),
       });
     }
   }

@@ -5,6 +5,7 @@ import type {
   HeartRateSensorLabel,
   HeartRateTexture,
 } from '../../types/domain.ts';
+import { readDetail } from '../../public/js/utils/detailReader.js';
 import { DATA_DIR } from '../config.ts';
 import { CorruptCacheError, writeFileAtomic } from './atomicFile.ts';
 import { createWriteLock } from './writeLock.ts';
@@ -81,33 +82,21 @@ const STRAP_THRESHOLD = -0.5;
 const MIN_SAMPLES = 300;
 const WARMUP_SAMPLES = 120;
 
-const TRACKPOINT_RE = /<Trackpoint>([\s\S]*?)<\/Trackpoint>/g;
-const HR_RE = /<HeartRateBpm[^>]*>\s*<Value>(\d+)<\/Value>/;
-const DISTANCE_RE = /<DistanceMeters>([\d.]+)<\/DistanceMeters>/;
-const CADENCE_RE = /<Cadence>(\d+)<\/Cadence>/;
-
 /**
- * Pull the heart rate series out of a TCX, keeping only trackpoints that
- * actually carry a heart rate. Polar interleaves position-only trackpoints
- * that would otherwise show up as gaps.
+ * The heart rate series of a TCX, read through `readDetail`, keeping only
+ * trackpoints that actually carry a heart rate. Polar interleaves
+ * position-only trackpoints that would otherwise show up as gaps.
  */
 function readSeries(xml: string): HrSeries {
   const hr: number[] = [];
   const distance: (number | null)[] = [];
   const cadence: (number | null)[] = [];
 
-  TRACKPOINT_RE.lastIndex = 0;
-  let match;
-  while ((match = TRACKPOINT_RE.exec(xml)) !== null) {
-    const body = match[1];
-    const hrMatch = body.match(HR_RE);
-    if (!hrMatch) continue;
-
-    hr.push(Number(hrMatch[1]));
-    const distMatch = body.match(DISTANCE_RE);
-    distance.push(distMatch ? Number(distMatch[1]) : null);
-    const cadMatch = body.match(CADENCE_RE);
-    cadence.push(cadMatch ? Number(cadMatch[1]) : null);
+  for (const tp of readDetail({ tcx: xml })?.allTrackpoints ?? []) {
+    if (tp.heartRate === null) continue;
+    hr.push(tp.heartRate);
+    distance.push(tp.distance);
+    cadence.push(tp.cadence);
   }
 
   return { hr, distance, cadence };

@@ -58,14 +58,15 @@ test('a lap without heart rate has null heart rates', () => {
   assert.equal(detail.allTrackpoints[0].heartRate, null);
 });
 
-test('a trackpoint carries its time, position, heart rate, speed and distance', () => {
+test('a trackpoint carries its time, position, heart rate, speed, distance and cadence', () => {
   const detail = read(tcx(lap(trackpoint(`
     <Position><LatitudeDegrees>0.001</LatitudeDegrees><LongitudeDegrees>0.002</LongitudeDegrees></Position>
     <DistanceMeters>12.5</DistanceMeters>
     <HeartRateBpm><Value>142</Value></HeartRateBpm>
+    <Cadence>84</Cadence>
     <Extensions><ns3:TPX><ns3:Speed>3.1</ns3:Speed></ns3:TPX></Extensions>`))));
   assert.deepEqual(detail.allTrackpoints, [{
-    time: '2000-01-01T08:00:01.000Z', lat: 0.001, lon: 0.002, heartRate: 142, speed: 3.1, distance: 12.5,
+    time: '2000-01-01T08:00:01.000Z', lat: 0.001, lon: 0.002, heartRate: 142, speed: 3.1, distance: 12.5, cadence: 84,
   }]);
   assert.deepEqual(detail.route, [[0.001, 0.002]]);
 });
@@ -87,6 +88,16 @@ test('a TCX element under a prefix reads like one without', () => {
   const detail = read(xml);
   assert.equal(detail.laps[0].duration, 60);
   assert.equal(detail.allTrackpoints[0].heartRate, 120);
+});
+
+test('cadence is read when present, under a prefix or not, and null when missing or malformed', () => {
+  const cadences = [
+    '<Cadence>86</Cadence>',
+    '<tc:Cadence xmlns:tc="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2">86</tc:Cadence>',
+    '',
+    '<Cadence>quick</Cadence>',
+  ].map((inner) => read(tcx(lap(trackpoint(inner)))).allTrackpoints[0].cadence);
+  assert.deepEqual(cadences, [86, 86, null, null]);
 });
 
 test('a missing or malformed number is null, never NaN', () => {

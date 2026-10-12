@@ -84,6 +84,8 @@ export interface Trackpoint {
   speed: number | null;
   /** Cumulative metres since the start. */
   distance: number | null;
+  /** The TCX's own `Cadence`, as written; only the heart rate sensor classifier reads it. */
+  cadence: number | null;
 }
 
 /** A GPS coordinate as `[latitude, longitude]`. */
