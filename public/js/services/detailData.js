@@ -46,7 +46,8 @@ export function createDetailLoader({ store, fetchTcx, fetchGpx, now = Date.now }
   async function fetchAndStore(id) {
     // GPX only when there is no TCX: it has the route only
     const tcx = await fetchTcx(id);
-    const detail = readDetail({ tcx, gpx: tcx ? null : await fetchGpx(id) });
+    const gpx = tcx ? null : await fetchGpx(id);
+    const detail = readDetail({ tcx, gpx });
     if (detail) {
       await store.put({ id, detail });
       return detail;
