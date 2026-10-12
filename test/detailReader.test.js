@@ -56,7 +56,6 @@ test('a lap without heart rate has null heart rates', () => {
   const detail = read(tcx(lap(trackpoint('<DistanceMeters>3</DistanceMeters>'), { heartRate: false })));
   assert.deepEqual(detail.laps, [{ index: 1, duration: 300.5, distance: 1000, avgHR: null, maxHR: null }]);
   assert.equal(detail.allTrackpoints[0].heartRate, null);
-  assert.equal(detail.hasHeartRate, false);
 });
 
 test('a trackpoint carries its time, position, heart rate, speed and distance', () => {
@@ -69,7 +68,6 @@ test('a trackpoint carries its time, position, heart rate, speed and distance', 
     time: '2000-01-01T08:00:01.000Z', lat: 0.001, lon: 0.002, heartRate: 142, speed: 3.1, distance: 12.5,
   }]);
   assert.deepEqual(detail.route, [[0.001, 0.002]]);
-  assert.deepEqual([detail.hasGps, detail.hasHeartRate, detail.hasSpeed], [true, true, true]);
 });
 
 test('speed reads the same under ns3:, under no prefix and under any other prefix', () => {
@@ -103,14 +101,12 @@ test('a missing or malformed number is null, never NaN', () => {
     assert.equal(tp.heartRate, null);
     assert.equal(tp.speed, null);
   }
-  assert.equal(detail.hasSpeed, false);
 });
 
 test('a trackpoint without position adds nothing to the route', () => {
   const detail = read(tcx(lap(trackpoint('<Position><LatitudeDegrees>1</LatitudeDegrees></Position>'))));
   assert.deepEqual(detail.route, []);
   assert.equal(detail.allTrackpoints[0].lat, 1);
-  assert.equal(detail.hasGps, false);
 });
 
 test('the synthetic heart rate fixture reads every trackpoint', () => {
@@ -133,9 +129,6 @@ test('a GPX-only exercise gives its route with empty laps and trackpoints', () =
     laps: [],
     allTrackpoints: [],
     route: [[0.001, 0.002], [0.003, 0.004]],
-    hasGps: true,
-    hasHeartRate: false,
-    hasSpeed: false,
   });
 });
 

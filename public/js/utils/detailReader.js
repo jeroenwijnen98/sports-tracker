@@ -66,14 +66,7 @@ function readTcx(xml) {
     }
   }
 
-  return {
-    laps,
-    allTrackpoints,
-    route,
-    hasGps: route.length > 0,
-    hasHeartRate: allTrackpoints.some((tp) => tp.heartRate !== null),
-    hasSpeed: allTrackpoints.some((tp) => tp.speed !== null),
-  };
+  return { laps, allTrackpoints, route };
 }
 
 /**
@@ -103,14 +96,7 @@ function readGpx(xml) {
     const lon = number(trkpt.attrs.lon);
     if (lat !== null && lon !== null) route.push([lat, lon]);
   }
-  return {
-    laps: [],
-    allTrackpoints: [],
-    route,
-    hasGps: route.length > 0,
-    hasHeartRate: false,
-    hasSpeed: false,
-  };
+  return { laps: [], allTrackpoints: [], route };
 }
 
 /**

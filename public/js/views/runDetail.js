@@ -606,7 +606,7 @@ function renderLaps(detail) {
  * @param {ViewTicket} ticket
  */
 async function renderMap(detail, ticket) {
-  if (!detail.hasGps || detail.route.length === 0) return;
+  if (detail.route.length === 0) return;
 
   const section = /** @type {HTMLElement} */ (document.getElementById('run-detail-map-section'));
   section.style.display = '';

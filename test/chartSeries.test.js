@@ -36,14 +36,7 @@ function trackpoints(count, { speedAt = () => 3, hr = 150, withSpeed = true } = 
  * @returns {DetailData}
  */
 function detail(allTrackpoints) {
-  return {
-    laps: [],
-    allTrackpoints,
-    route: [],
-    hasGps: false,
-    hasHeartRate: allTrackpoints.some((tp) => tp.heartRate !== null),
-    hasSpeed: allTrackpoints.some((tp) => tp.speed !== null),
-  };
+  return { laps: [], allTrackpoints, route: [] };
 }
 
 test('trackpoints without <Speed> get a pace derived from distance and time', () => {
@@ -92,8 +85,14 @@ test('detail data without heart rate has a null heart rate range', () => {
   assert.equal(series.hrRange, null);
 });
 
+test('detail data stored with the old derived flags gives the same series', () => {
+  const current = detail(trackpoints(60));
+  const legacy = /** @type {DetailData} */ ({ ...current, hasGps: true, hasHeartRate: false, hasSpeed: false });
+  assert.deepEqual(buildChartSeries(legacy), buildChartSeries(current));
+});
+
 test('GPX-only detail data (no trackpoints) gives no series', () => {
-  assert.equal(buildChartSeries({ ...detail([]), route: [[52, 5], [52.001, 5.001]], hasGps: true }), null);
+  assert.equal(buildChartSeries({ ...detail([]), route: [[52, 5], [52.001, 5.001]] }), null);
 });
 
 test('a single trackpoint gives no series', () => {

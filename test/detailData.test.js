@@ -72,6 +72,13 @@ test('stored detail data is returned without a fetch', async () => {
   assert.deepEqual(calls, { tcx: 0, gpx: 0 });
 });
 
+test('a details entry stored with the old derived flags is returned as it is, without a fetch', async () => {
+  const legacy = /** @type {DetailData} */ ({ ...parsed, hasGps: false, hasHeartRate: true, hasSpeed: false });
+  const { load, calls } = setup({ entries: [{ id: 'a', detail: legacy }] });
+  assert.deepEqual(await load('a'), legacy);
+  assert.deepEqual(calls, { tcx: 0, gpx: 0 });
+});
+
 test('a fetched TCX is stored, and the next load reads it from the store', async () => {
   const { load, db, calls } = setup();
   assert.deepEqual(await load('a'), parsed);
@@ -117,7 +124,7 @@ test('GPX is not fetched when there is a TCX', async () => {
 test('without a TCX the GPX route is used', async () => {
   const { load, calls } = setup({ tcx: null, gpx: GPX });
   assert.deepEqual(await load('a'), {
-    route: [[1, 2]], hasGps: true, laps: [], allTrackpoints: [], hasHeartRate: false, hasSpeed: false,
+    route: [[1, 2]], laps: [], allTrackpoints: [],
   });
   assert.deepEqual(calls, { tcx: 1, gpx: 1 });
 });

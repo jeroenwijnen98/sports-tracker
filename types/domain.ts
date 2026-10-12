@@ -97,9 +97,6 @@ export interface DetailData {
   laps: Lap[];
   allTrackpoints: Trackpoint[];
   route: Route;
-  hasGps: boolean;
-  hasHeartRate: boolean;
-  hasSpeed: boolean;
 }
 
 // ─── Heart rate ──────────────────────────────────────────────────────────────
