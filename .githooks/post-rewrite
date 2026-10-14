@@ -1,0 +1,4 @@
+#!/bin/bash
+# Covers `git pull --rebase`; an amend already ran post-commit.
+[ "$1" = rebase ] || exit 0
+exec .githooks/reinstall-app ORIG_HEAD HEAD

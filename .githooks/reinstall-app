@@ -1,0 +1,11 @@
+#!/bin/bash
+# Shared by the post-* hooks: reruns install-app.command when the commits
+# between $1 and $2 touched the bundle or the installer, so the copy in
+# /Applications never goes stale. Leaves machines that never installed it alone.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+BUNDLE=$(ls -d *.app 2>/dev/null | head -1)
+[ -n "$BUNDLE" ] && [ -d "/Applications/$BUNDLE" ] || exit 0
+git rev-parse -q --verify "$1^{commit}" >/dev/null || exit 0
+git diff --quiet "$1" "$2" -- "$BUNDLE" install-app.command && exit 0
+echo "$BUNDLE changed; reinstalling it in /Applications"
+./install-app.command
