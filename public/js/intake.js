@@ -132,7 +132,8 @@ export function createIntake(store) {
    * @returns {Promise<{ counts: IntakeCounts, newIds: string[] }>}
    */
   function ingestAndSave(incoming) {
-    const run = previous.then(() => ingestOnce(incoming), () => ingestOnce(incoming));
+    const run = previous.then(() => ingestOnce(incoming));
+    // `previous` never rejects, so a failed call does not stop the next one.
     previous = run.catch(() => {});
     return run;
   }
