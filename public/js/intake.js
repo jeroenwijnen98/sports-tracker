@@ -103,19 +103,57 @@ export function ingest(incoming, { existing, shoes }) {
 }
 
 /**
- * Run exercises through `ingest()` against the stored exercises and shoes, and
- * write what it returns in one transaction. Returns the counts and the ids of
- * the new exercises, whose detail data is still to be fetched.
- *
- * @param {Exercise[]} incoming
- * @returns {Promise<{ counts: IntakeCounts, newIds: string[] }>}
+ * The store access intake needs. Node tests pass an in-memory one.
+ * @typedef {{
+ *   exercises: () => Promise<Exercise[]>,
+ *   shoes: () => Promise<Shoe[]>,
+ *   putExercises: (items: Exercise[]) => Promise<void>,
+ * }} IntakeStore
  */
-export async function ingestAndSave(incoming) {
-  const [existing, shoes] = await Promise.all([getAll('exercises'), getAll('shoes')]);
-  const { toSave, updatedExisting, counts } = ingest(incoming, { existing, shoes });
 
-  const writes = [...toSave, ...updatedExisting];
-  if (writes.length > 0) await putMany('exercises', writes);
+/**
+ * Build `ingestAndSave` over `store`. Calls run one at a time, each starting
+ * after the previous one has written (whether it succeeded or failed), so
+ * every call reads the exercises the one before it stored: a sync and a file
+ * import arriving together cannot both save the same exercise.
+ *
+ * @param {IntakeStore} store
+ */
+export function createIntake(store) {
+  /** @type {Promise<unknown>} */
+  let previous = Promise.resolve();
 
-  return { counts, newIds: toSave.map((e) => e.id) };
+  /**
+   * Run exercises through `ingest()` against the stored exercises and shoes,
+   * and write what it returns in one transaction. Returns the counts and the
+   * ids of the new exercises, whose detail data is still to be fetched.
+   *
+   * @param {Exercise[]} incoming
+   * @returns {Promise<{ counts: IntakeCounts, newIds: string[] }>}
+   */
+  function ingestAndSave(incoming) {
+    const run = previous.then(() => ingestOnce(incoming), () => ingestOnce(incoming));
+    previous = run.catch(() => {});
+    return run;
+  }
+
+  /** @param {Exercise[]} incoming */
+  async function ingestOnce(incoming) {
+    const [existing, shoes] = await Promise.all([store.exercises(), store.shoes()]);
+    const { toSave, updatedExisting, counts } = ingest(incoming, { existing, shoes });
+
+    const writes = [...toSave, ...updatedExisting];
+    if (writes.length > 0) await store.putExercises(writes);
+
+    return { counts, newIds: toSave.map((e) => e.id) };
+  }
+
+  return ingestAndSave;
 }
+
+/** Intake over IndexedDB, the one every caller in the app uses. */
+export const ingestAndSave = createIntake({
+  exercises: () => getAll('exercises'),
+  shoes: () => getAll('shoes'),
+  putExercises: (items) => putMany('exercises', items),
+});

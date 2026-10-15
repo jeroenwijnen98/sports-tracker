@@ -10,6 +10,7 @@ import { renderActivity } from './views/activity.js';
 import { renderShoes } from './views/shoes.js';
 import { showToast } from './components/toast.js';
 import { keepSessionAlive } from './session.js';
+import { createBusyGuard } from './utils/busyGuard.js';
 
 const authScreen = /** @type {HTMLElement} */ (document.getElementById('auth-screen'));
 const appScreen = /** @type {HTMLElement} */ (document.getElementById('app-screen'));
@@ -64,10 +65,19 @@ async function prefetchDetails(ids) {
   }
 }
 
-// Sync
-async function doSync() {
-  if (syncBtn.classList.contains('syncing')) return;
+// Sync and file import share one busy state, so their intakes never overlap:
+// while either runs, both buttons are disabled and the other is refused. The
+// `syncing` class only draws the spinner.
+const busy = createBusyGuard((isBusy) => {
+  for (const btn of [syncBtn, importBtn]) btn.toggleAttribute('disabled', isBusy);
+});
 
+// Sync
+function doSync() {
+  return busy.run(sync);
+}
+
+async function sync() {
   syncBtn.classList.add('syncing');
   try {
     const { counts, newIds } = await syncExercises();
@@ -95,12 +105,21 @@ async function doSync() {
 syncBtn.addEventListener('click', doSync);
 
 // Import
-importBtn.addEventListener('click', () => importFileInput.click());
+importBtn.addEventListener('click', () => {
+  if (!busy.busy) importFileInput.click();
+});
 
-importFileInput.addEventListener('change', async () => {
+importFileInput.addEventListener('change', () => {
   const files = Array.from(importFileInput.files || []);
+  importFileInput.value = '';
   if (files.length === 0) return;
+  busy.run(() => importAll(files)).then(({ ran }) => {
+    if (!ran) showToast('Wacht tot de synchronisatie of import klaar is', 'info');
+  });
+});
 
+/** @param {File[]} files */
+async function importAll(files) {
   importBtn.classList.add('syncing');
   try {
     const { counts, duplicates, newIds } = await importFiles(files, {
@@ -120,9 +139,8 @@ importFileInput.addEventListener('change', async () => {
     showToast('Import mislukt', 'error');
   } finally {
     importBtn.classList.remove('syncing');
-    importFileInput.value = '';
   }
-});
+}
 
 // Logout
 logoutBtn.addEventListener('click', async () => {

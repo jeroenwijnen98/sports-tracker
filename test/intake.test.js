@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ingest } from '../public/js/intake.js';
+import { ingest, createIntake } from '../public/js/intake.js';
 
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
 /** @typedef {import('../types/domain.ts').Shoe} Shoe */
@@ -133,4 +133,74 @@ test('a stored Beat run marked overlap and given a sensor in one sync is one upd
   );
 
   assert.deepEqual(updatedExisting, [{ ...stored, overlap: true, hrSensor: incomingBeat.hrSensor }]);
+});
+
+/**
+ * An in-memory intake store whose reads and writes each take a tick, as
+ * IndexedDB's do, so two intakes that are not serialised both read before
+ * either writes.
+ * @param {Exercise[]} [stored]
+ */
+function memoryStore(stored = []) {
+  /** @type {Map<string, Exercise>} */
+  const exercises = new Map(stored.map((e) => [e.id, e]));
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 1));
+  return {
+    exercises,
+    store: {
+      exercises: async () => { await tick(); return [...exercises.values()]; },
+      shoes: async () => { await tick(); return shoes; },
+      /** @param {Exercise[]} items */
+      putExercises: async (items) => { await tick(); for (const e of items) exercises.set(e.id, e); },
+    },
+  };
+}
+
+test('two intakes started together run one after the other: the second reads what the first stored', async () => {
+  const { exercises, store } = memoryStore();
+  const ingestAndSave = createIntake(store);
+
+  const synced = run('polar-1', 'Polar Pacer', '08:00');
+  /** @type {Exercise} */
+  const imported = { ...run('import-1', 'Polar Pacer', '08:00'), source: 'tcx-import' };
+
+  const [sync, fileImport] = await Promise.all([ingestAndSave([synced]), ingestAndSave([imported])]);
+
+  assert.deepEqual([...exercises.keys()], ['polar-1'], 'the same exercise is stored once');
+  assert.deepEqual(sync.newIds, ['polar-1']);
+  assert.deepEqual(fileImport.newIds, []);
+  assert.equal(fileImport.counts.duplicates, 1, 'and counted once as a duplicate');
+  assert.equal(sync.counts.duplicates + fileImport.counts.duplicates, 1);
+});
+
+test('two intakes started together see each other for overlap', async () => {
+  const { exercises, store } = memoryStore();
+  const ingestAndSave = createIntake(store);
+
+  await Promise.all([
+    ingestAndSave([run('pacer', 'Polar Pacer', '08:00')]),
+    ingestAndSave([{ ...run('beat', 'Polar Beat', '08:02'), source: 'tcx-import' }]),
+  ]);
+
+  assert.equal(exercises.get('beat')?.overlap, true);
+  assert.equal(exercises.get('pacer')?.overlap, undefined);
+});
+
+test('a failed intake does not stop the next one', async () => {
+  const { exercises, store } = memoryStore();
+  let fail = true;
+  const ingestAndSave = createIntake({
+    ...store,
+    putExercises: async (items) => {
+      if (fail) { fail = false; throw new Error('write failed'); }
+      await store.putExercises(items);
+    },
+  });
+
+  const first = ingestAndSave([run('a', 'Polar Pacer', '08:00')]);
+  const second = ingestAndSave([run('b', 'Polar Pacer', '10:00')]);
+
+  await assert.rejects(first, /write failed/);
+  assert.deepEqual((await second).newIds, ['b']);
+  assert.deepEqual([...exercises.keys()], ['b']);
 });

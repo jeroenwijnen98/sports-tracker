@@ -62,6 +62,14 @@
   justify-content: center;
 }
 
+.btn-icon:disabled {
+  cursor: default;
+}
+
+.btn-icon:disabled:not(.syncing) {
+  opacity: 0.4;
+}
+
 /* Run Card */
 .run-card {
   background: var(--bg-card);
