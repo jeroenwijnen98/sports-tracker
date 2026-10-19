@@ -14,18 +14,18 @@
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
+    "@ai-hero/sandcastle": "^0.12.0",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@ai-hero/sandcastle": "^0.12.0",
-    "@jeroenwijnen98/standards": "github:jeroenwijnen98/standards#v0.3.1",
+    "@jeroenwijnen98/standards": "github:jeroenwijnen98/standards#v0.4.0",
     "@oxlint/plugins": "1.86.0",
     "@types/express": "^4.17.25",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^26.6.3",
     "oxlint": "1.86.0",
-    "typescript": "^7.0.2",
-    "zod": "^4.6.5"
+    "typescript": "^7.0.2"
   }
 }
