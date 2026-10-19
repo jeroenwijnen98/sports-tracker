@@ -35,7 +35,7 @@ ENV PATH="/home/agent/.local/bin:$PATH"
 # under Sandcastle's 10-minute idle timeout.
 ENV BASH_DEFAULT_TIMEOUT_MS=540000 BASH_MAX_TIMEOUT_MS=540000
 # A rerun of the full check on a tree it already passed returns at once
-# (.githooks/checked-tree).
+# (checked-tree, from @jeroenwijnen98/standards).
 ENV CHECKED_TREE_REUSE=1
 
 # Dependencies are not baked in: the onSandboxReady hook in main.mts runs
