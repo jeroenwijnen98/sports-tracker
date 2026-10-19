@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Response } from 'express';
 import express from 'express';
-import { tokenCheck } from '../middleware/tokenCheck.ts';
+import { tokenCheck, polarAuth } from '../middleware/tokenCheck.ts';
 import { withToken } from '../services/polarApi.ts';
 import { syncFromPolar } from '../services/polarSync.ts';
 import * as archive from '../services/exerciseArchive.ts';
@@ -16,8 +16,8 @@ router.use(tokenCheck);
 
 router.get('/exercises', async (req, res) => {
   try {
-    // tokenCheck has set both, or the request never got here
-    await syncFromPolar({ request: withToken(req.accessToken!), userId: req.polarUserId! });
+    const { accessToken, polarUserId } = polarAuth(req);
+    await syncFromPolar({ request: withToken(accessToken), userId: polarUserId });
 
     // Return all stored exercises (combines both sources)
     res.json(await archive.list());
@@ -46,7 +46,7 @@ router.delete('/exercises/:id', async (req, res) => {
 
 router.get('/exercises/:id/:type', async (req, res, next) => {
   const { id, type } = req.params;
-  const answer = await readExerciseXml(withToken(req.accessToken!), type, id);
+  const answer = await readExerciseXml(withToken(polarAuth(req).accessToken), type, id);
   if (answer.status === 'not-xml') return next();
   if (answer.status === 'found') return res.type('application/xml').send(answer.xml);
   res.status(404).json({ error: `${type.toUpperCase()} data niet beschikbaar.` });

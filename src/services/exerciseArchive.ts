@@ -29,8 +29,8 @@ export type ArchiveSource = 'transaction' | 'training-api' | 'import';
  * deleted is skipped, or the Training Data API would hand a recent one
  * straight back. Returns the count added.
  */
-export async function addExercises(list: Exercise[], { source }: { source: ArchiveSource }): Promise<number> {
-  return appendToCache(list, { skipDeleted: source !== 'import' });
+export async function addExercises(exercises: Exercise[], { source }: { source: ArchiveSource }): Promise<number> {
+  return appendToCache(exercises, { skipDeleted: source !== 'import' });
 }
 
 /** Every stored exercise, with its heart rate sensor. */

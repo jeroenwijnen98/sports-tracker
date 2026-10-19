@@ -190,13 +190,13 @@ export async function del(storeName, key) {
 export async function putMany(storeName, items) {
   const db = await open();
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction(storeName, 'readwrite');
-    const store = transaction.objectStore(storeName);
+    const writeTx = db.transaction(storeName, 'readwrite');
+    const store = writeTx.objectStore(storeName);
     for (const item of items) {
       store.put(item);
     }
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
+    writeTx.oncomplete = () => resolve();
+    writeTx.onerror = () => reject(writeTx.error);
   });
 }
 

@@ -60,20 +60,20 @@ test('reads its arguments without changing them', () => {
  */
 function fakeStore(initialShoes = [], initialExercises = []) {
   /** @type {Map<number, Shoe>} */
-  const shoes = new Map(initialShoes.map((s) => [/** @type {number} */ (s.id), { ...s }]));
+  const shoesById = new Map(initialShoes.map((s) => [/** @type {number} */ (s.id), { ...s }]));
   /** @type {Map<string, Exercise>} */
   const exercises = new Map(initialExercises.map((e) => [e.id, { ...e }]));
-  let nextId = Math.max(0, ...shoes.keys()) + 1;
-  const state = { shoes, exercises, transactions: 0 };
+  let nextId = Math.max(0, ...shoesById.keys()) + 1;
+  const state = { shoes: shoesById, exercises, transactions: 0 };
 
   /** @type {import('../public/js/shoes.js').ShoeStores} */
   const stores = {
     shoes: {
-      get: async (key) => shoes.get(/** @type {number} */ (key)),
-      getAll: async () => [...shoes.values()].map((s) => ({ ...s })),
-      put: async (shoe) => { shoes.set(/** @type {number} */ (shoe.id), { ...shoe }); return /** @type {number} */ (shoe.id); },
-      add: async (shoe) => { const id = nextId++; shoes.set(id, { ...shoe, id }); return id; },
-      delete: async (key) => { shoes.delete(/** @type {number} */ (key)); },
+      get: async (key) => shoesById.get(/** @type {number} */ (key)),
+      getAll: async () => [...shoesById.values()].map((s) => ({ ...s })),
+      put: async (shoe) => { shoesById.set(/** @type {number} */ (shoe.id), { ...shoe }); return /** @type {number} */ (shoe.id); },
+      add: async (shoe) => { const id = nextId++; shoesById.set(id, { ...shoe, id }); return id; },
+      delete: async (key) => { shoesById.delete(/** @type {number} */ (key)); },
     },
     exercises: {
       get: async (key) => exercises.get(/** @type {string} */ (key)),
@@ -91,8 +91,8 @@ function fakeStore(initialShoes = [], initialExercises = []) {
   return { ...ops, state };
 }
 
-/** @param {Map<number, Shoe>} shoes */
-const defaults = (shoes) => [...shoes.values()].filter((s) => s.isDefault).map((s) => s.id);
+/** @param {Map<number, Shoe>} shoesById */
+const defaults = (shoesById) => [...shoesById.values()].filter((s) => s.isDefault).map((s) => s.id);
 
 /** @type {(id: number, isDefault?: boolean) => Shoe} */
 const shoe = (id, isDefault = false) => ({ id, name: `Schoen ${id}`, initialKm: 0, isDefault });
