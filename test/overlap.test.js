@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { markOverlaps } from '../public/js/utils/overlap.js';
+import { markOverlaps, releasedOverlaps } from '../public/js/utils/overlap.js';
 
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
 
@@ -140,4 +140,26 @@ test('an exercise without a start is never marked and never marks another', () =
 test('a UTC instant against a local time without offset is never an overlap', () => {
   const { count } = markOverlaps([run('p', 'Polar Beat', '08:00'), tcxWatch], []);
   assert.equal(count, 0);
+});
+
+test('released: the phone recording a deleted watch recording leaves behind', () => {
+  const watch = run('w', 'Polar Pacer', '08:00');
+  const phone = { ...run('p', 'Polar Beat', '08:02'), overlap: true };
+  const before = JSON.stringify([watch, phone]);
+
+  assert.deepEqual(releasedOverlaps(watch, [phone]), [{ ...phone, overlap: false }]);
+  assert.equal(JSON.stringify([watch, phone]), before, 'inputs are not mutated');
+});
+
+test('released: a phone recording still overlapping another watch recording stays an overlap', () => {
+  const phone = { ...run('p', 'Polar Beat', '08:02'), overlap: true };
+  const removed = run('w1', 'Polar Pacer', '08:00');
+  assert.deepEqual(releasedOverlaps(removed, [phone, run('w2', 'Polar Vantage', '08:01')]), []);
+});
+
+test('released: deleting a phone recording or a run at another time releases nothing', () => {
+  const phone = { ...run('p', 'Polar Beat', '08:02'), overlap: true };
+  assert.deepEqual(releasedOverlaps(run('p2', 'Polar Beat', '08:00'), [phone]), []);
+  assert.deepEqual(releasedOverlaps(run('w', 'Polar Pacer', '10:00'), [phone]), []);
+  assert.deepEqual(releasedOverlaps(run('w', 'Polar Pacer', '08:00'), [run('q', 'Polar Beat', '08:02')]), []);
 });

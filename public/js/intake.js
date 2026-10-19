@@ -1,8 +1,8 @@
 // @ts-check
 
-import { getAll, putMany } from './db.js';
+import { getAll, putMany, transaction } from './db.js';
 import { isRunningSport } from './utils/sports.js';
-import { markOverlaps } from './utils/overlap.js';
+import { markOverlaps, releasedOverlaps } from './utils/overlap.js';
 import { sameExercise } from './utils/identity.js';
 
 /** @typedef {import('../../types/domain.ts').Exercise} Exercise */
@@ -103,25 +103,59 @@ export function ingest(incoming, { existing, shoes }) {
 }
 
 /**
+ * The way out beside `ingest`: what taking exercise `id` out of the store
+ * writes. The exercise goes, and every phone recording that was an overlap
+ * only because of it is an overlap no more (see `releasedOverlaps`). An id
+ * not stored deletes and updates nothing. Pure: mutates none of its
+ * arguments.
+ *
+ * @param {string} id
+ * @param {{ existing: Exercise[] }} store
+ * @returns {{ toDelete: string[], updatedExisting: Exercise[] }}
+ */
+export function withdraw(id, { existing }) {
+  const removed = existing.find((e) => e.id === id);
+  if (!removed) return { toDelete: [], updatedExisting: [] };
+  const remaining = existing.filter((e) => e !== removed);
+  return { toDelete: [id], updatedExisting: releasedOverlaps(removed, remaining) };
+}
+
+/**
  * The store access intake needs. Node tests pass an in-memory one.
+ * `deleteExercises` deletes `ids` and puts `updates` in one transaction.
  * @typedef {{
  *   exercises: () => Promise<Exercise[]>,
  *   shoes: () => Promise<Shoe[]>,
  *   putExercises: (items: Exercise[]) => Promise<void>,
+ *   deleteExercises: (ids: string[], updates: Exercise[]) => Promise<void>,
  * }} IntakeStore
  */
 
 /**
- * Build `ingestAndSave` over `store`. Calls run one at a time, each starting
- * after the previous one has written (whether it succeeded or failed), so
- * every call reads the exercises the one before it stored: a sync and a file
- * import arriving together cannot both save the same exercise.
+ * Build `ingestAndSave` and `remove` over `store`. Calls to either run one at
+ * a time, each starting after the previous one has written (whether it
+ * succeeded or failed), so every call reads the exercises the one before it
+ * stored: a sync and a file import arriving together cannot both save the
+ * same exercise, and a sync cannot save back an exercise just removed.
  *
  * @param {IntakeStore} store
  */
 export function createIntake(store) {
   /** @type {Promise<unknown>} */
   let previous = Promise.resolve();
+
+  /**
+   * Queue `call` behind every call before it.
+   * @template T
+   * @param {() => Promise<T>} call
+   * @returns {Promise<T>}
+   */
+  function enqueue(call) {
+    const run = previous.then(call);
+    // `previous` never rejects, so a failed call does not stop the next one.
+    previous = run.catch(() => {});
+    return run;
+  }
 
   /**
    * Run exercises through `ingest()` against the stored exercises and shoes,
@@ -132,10 +166,19 @@ export function createIntake(store) {
    * @returns {Promise<{ counts: IntakeCounts, newIds: string[] }>}
    */
   function ingestAndSave(incoming) {
-    const run = previous.then(() => ingestOnce(incoming));
-    // `previous` never rejects, so a failed call does not stop the next one.
-    previous = run.catch(() => {});
-    return run;
+    return enqueue(() => ingestOnce(incoming));
+  }
+
+  /**
+   * Take exercise `id` out of the store through `withdraw()`, deleting it and
+   * writing the overlaps it clears in one transaction. Detail data is not
+   * intake's: the `details` store is left alone.
+   *
+   * @param {string} id
+   * @returns {Promise<void>}
+   */
+  function remove(id) {
+    return enqueue(() => removeOnce(id));
   }
 
   /** @param {Exercise[]} incoming */
@@ -149,12 +192,21 @@ export function createIntake(store) {
     return { counts, newIds: toSave.map((e) => e.id) };
   }
 
-  return ingestAndSave;
+  /** @param {string} id */
+  async function removeOnce(id) {
+    const { toDelete, updatedExisting } = withdraw(id, { existing: await store.exercises() });
+    if (toDelete.length > 0) await store.deleteExercises(toDelete, updatedExisting);
+  }
+
+  return { ingestAndSave, remove };
 }
 
 /** Intake over IndexedDB, the one every caller in the app uses. */
-export const ingestAndSave = createIntake({
+export const { ingestAndSave, remove } = createIntake({
   exercises: () => getAll('exercises'),
   shoes: () => getAll('shoes'),
   putExercises: (items) => putMany('exercises', items),
+  deleteExercises: (ids, updates) => transaction(['exercises'], async ({ exercises }) => {
+    await Promise.all([...ids.map((id) => exercises.delete(id)), ...updates.map((e) => exercises.put(e))]);
+  }),
 });

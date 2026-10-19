@@ -84,3 +84,26 @@ export function markOverlaps(imported, existing) {
 
   return { imported: result, updatedExisting: [...updated.values()], count };
 }
+
+/**
+ * The overlaps `removed` leaves behind once it is gone: every stored phone
+ * recording marked overlap that ran at the same time as `removed` and overlaps
+ * no watch recording in `remaining`. They come back with `overlap: false`, to
+ * be saved, so they count towards totals again. Only a watch recording makes
+ * a phone recording an overlap, so removing a phone recording releases none.
+ *
+ * Does not mutate its arguments.
+ *
+ * @param {Exercise} removed
+ * @param {Exercise[]} remaining The stored exercises without `removed`.
+ * @returns {Exercise[]}
+ */
+export function releasedOverlaps(removed, remaining) {
+  if (isPhoneApp(removed.device)) return [];
+  return remaining
+    .filter((stored) =>
+      isPhoneApp(stored.device) && stored.overlap && overlapsInTime(stored, removed)
+      && !remaining.some((other) => !isPhoneApp(other.device) && overlapsInTime(stored, other))
+    )
+    .map((stored) => ({ ...stored, overlap: false }));
+}

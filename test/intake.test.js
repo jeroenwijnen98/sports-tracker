@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ingest, createIntake } from '../public/js/intake.js';
+import { ingest, withdraw, createIntake } from '../public/js/intake.js';
 
 /** @typedef {import('../types/domain.ts').Exercise} Exercise */
 /** @typedef {import('../types/domain.ts').Shoe} Shoe */
@@ -152,13 +152,19 @@ function memoryStore(stored = []) {
       shoes: async () => { await tick(); return shoes; },
       /** @param {Exercise[]} items */
       putExercises: async (items) => { await tick(); for (const e of items) exercises.set(e.id, e); },
+      /** @param {string[]} ids @param {Exercise[]} updates */
+      deleteExercises: async (ids, updates) => {
+        await tick();
+        for (const id of ids) exercises.delete(id);
+        for (const e of updates) exercises.set(e.id, e);
+      },
     },
   };
 }
 
 test('two intakes started together run one after the other: the second reads what the first stored', async () => {
   const { exercises, store } = memoryStore();
-  const ingestAndSave = createIntake(store);
+  const { ingestAndSave } = createIntake(store);
 
   const synced = run('polar-1', 'Polar Pacer', '08:00');
   /** @type {Exercise} */
@@ -175,7 +181,7 @@ test('two intakes started together run one after the other: the second reads wha
 
 test('two intakes started together see each other for overlap', async () => {
   const { exercises, store } = memoryStore();
-  const ingestAndSave = createIntake(store);
+  const { ingestAndSave } = createIntake(store);
 
   await Promise.all([
     ingestAndSave([run('pacer', 'Polar Pacer', '08:00')]),
@@ -189,7 +195,7 @@ test('two intakes started together see each other for overlap', async () => {
 test('a failed intake does not stop the next one', async () => {
   const { exercises, store } = memoryStore();
   let fail = true;
-  const ingestAndSave = createIntake({
+  const { ingestAndSave } = createIntake({
     ...store,
     putExercises: async (items) => {
       if (fail) { fail = false; throw new Error('write failed'); }
@@ -203,4 +209,88 @@ test('a failed intake does not stop the next one', async () => {
   await assert.rejects(first, /write failed/);
   assert.deepEqual((await second).newIds, ['b']);
   assert.deepEqual([...exercises.keys()], ['b']);
+});
+
+test('withdrawing a watch recording clears overlap on its phone recording', () => {
+  const watch = run('pacer', 'Polar Pacer', '08:00');
+  const phone = { ...run('beat', 'Polar Beat', '08:02'), overlap: true };
+  const existing = [watch, phone];
+  const before = snapshot(existing);
+
+  const { toDelete, updatedExisting } = withdraw('pacer', { existing });
+
+  assert.deepEqual(toDelete, ['pacer']);
+  assert.deepEqual(updatedExisting, [{ ...phone, overlap: false }]);
+  assert.equal(snapshot(existing), before, 'the stored exercises are not mutated');
+});
+
+test('withdrawing a phone recording leaves the watch recording untouched', () => {
+  const existing = [run('pacer', 'Polar Pacer', '08:00'), { ...run('beat', 'Polar Beat', '08:02'), overlap: true }];
+  assert.deepEqual(withdraw('beat', { existing }), { toDelete: ['beat'], updatedExisting: [] });
+});
+
+test('a phone recording still overlapping a second watch recording stays an overlap', () => {
+  const existing = [
+    run('pacer', 'Polar Pacer', '08:00'),
+    run('vantage', 'Polar Vantage', '08:01'),
+    { ...run('beat', 'Polar Beat', '08:02'), overlap: true },
+  ];
+  assert.deepEqual(withdraw('pacer', { existing }), { toDelete: ['pacer'], updatedExisting: [] });
+});
+
+test('withdrawing an id not stored deletes nothing and updates nothing', () => {
+  const existing = [run('pacer', 'Polar Pacer', '08:00'), { ...run('beat', 'Polar Beat', '08:02'), overlap: true }];
+  assert.deepEqual(withdraw('gone', { existing }), { toDelete: [], updatedExisting: [] });
+});
+
+test('remove deletes the exercise and clears the overlap it leaves in one write', async () => {
+  const phone = { ...run('beat', 'Polar Beat', '08:02'), overlap: true };
+  const { exercises, store } = memoryStore([run('pacer', 'Polar Pacer', '08:00'), phone]);
+  /** @type {[string[], Exercise[]][]} */
+  const writes = [];
+  const { remove } = createIntake({
+    ...store,
+    deleteExercises: async (ids, updates) => { writes.push([ids, updates]); await store.deleteExercises(ids, updates); },
+  });
+
+  await remove('pacer');
+
+  assert.deepEqual(writes, [[['pacer'], [{ ...phone, overlap: false }]]]);
+  assert.deepEqual([...exercises.values()], [{ ...phone, overlap: false }]);
+});
+
+test('a remove and an ingest started together: the ingest reads what the remove wrote', async () => {
+  const { exercises, store } = memoryStore([run('pacer', 'Polar Pacer', '08:00')]);
+  const { ingestAndSave, remove } = createIntake(store);
+
+  const [, sync] = await Promise.all([remove('pacer'), ingestAndSave([run('beat', 'Polar Beat', '08:02')])]);
+
+  assert.deepEqual([...exercises.keys()], ['beat'], 'the deleted exercise is not saved back');
+  assert.equal(exercises.get('beat')?.overlap, undefined, 'and overlaps nothing');
+  assert.equal(sync.counts.overlaps, 0);
+});
+
+test('an ingest and a remove started together: the remove reads what the ingest wrote', async () => {
+  const { exercises, store } = memoryStore([run('beat', 'Polar Beat', '08:02')]);
+  const { ingestAndSave, remove } = createIntake(store);
+
+  await Promise.all([ingestAndSave([run('pacer', 'Polar Pacer', '08:00')]), remove('pacer')]);
+
+  assert.deepEqual([...exercises.keys()], ['beat']);
+  assert.equal(exercises.get('beat')?.overlap, false, 'the overlap the ingest set is cleared');
+});
+
+test('a failed remove does not stop the next call', async () => {
+  const { exercises, store } = memoryStore([run('a', 'Polar Pacer', '08:00')]);
+  const { ingestAndSave, remove } = createIntake({
+    ...store,
+    deleteExercises: async () => { throw new Error('delete failed'); },
+  });
+
+  const first = remove('a');
+  const second = ingestAndSave([run('b', 'Polar Pacer', '10:00')]);
+
+  await assert.rejects(first, /delete failed/);
+  assert.deepEqual((await second).newIds, ['b']);
+  assert.deepEqual([...exercises.keys()], ['a', 'b']);
 });
