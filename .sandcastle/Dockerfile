@@ -40,7 +40,7 @@ ENV PATH="/home/agent/.local/bin:$PATH"
 # under Sandcastle's 10-minute idle timeout.
 ENV BASH_DEFAULT_TIMEOUT_MS=540000 BASH_MAX_TIMEOUT_MS=540000
 # A rerun of the full check on a tree it already passed returns at once
-# (checked-tree, from @jeroenwijnen98/standards).
+# (checked-tree).
 ENV CHECKED_TREE_REUSE=1
 
 RUN curl -fsSL https://claude.ai/install.sh | bash
