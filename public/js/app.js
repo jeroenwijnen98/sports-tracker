@@ -8,6 +8,7 @@ import { load as loadDetail } from './services/detailData.js';
 import { renderActivities } from './views/activities.js';
 import { renderActivity } from './views/activity.js';
 import { renderShoes } from './views/shoes.js';
+import { onExerciseDeleted } from './views/runDetail.js';
 import { showToast } from './components/toast.js';
 import { keepSessionAlive } from './session.js';
 import { createBusyGuard } from './utils/busyGuard.js';
@@ -177,6 +178,8 @@ async function renderActiveTab() {
     await renderShoes();
   }
 }
+
+onExerciseDeleted(renderActiveTab);
 
 keepSessionAlive();
 init();

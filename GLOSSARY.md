@@ -38,6 +38,8 @@ devices were recording at once: the two started within a few minutes of each
 other and ran at the same time, their starts compared as exercise identity
 compares them. An exercise whose start cannot be compared is never an overlap.
 An overlapping exercise stays visible but does not count towards any total.
+An overlap ends when its partner is deleted: once no other recording of the run
+is left, the exercise counts again.
 _Avoid_: duplicate, double, ghost run
 
 **Detail data**:

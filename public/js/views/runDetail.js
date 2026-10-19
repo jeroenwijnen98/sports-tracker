@@ -1,9 +1,10 @@
 // @ts-check
 
-import { get, del } from '../db.js';
+import { get } from '../db.js';
 import { load, forget } from '../services/detailData.js';
-import { deleteExercise } from '../api.js';
-import { renderActivities } from './activities.js';
+import { deleteExercise as deleteOnServer } from '../api.js';
+import { remove } from '../intake.js';
+import { deleteExercise } from '../exerciseDeletion.js';
 import { formatDistance, formatDuration, formatPace, formatHeartRate, parseISODuration, sportLabel } from '../utils/format.js';
 import { formatDate, formatStart } from '../utils/date.js';
 import { escapeHtml } from '../utils/html.js';
@@ -31,6 +32,19 @@ let leafletMap = null;
 // Every await below checks its ticket: a result for a run that is no longer
 // on screen must not draw into the view of the one that is.
 const view = createCurrentView();
+
+/** @type {() => Promise<void>} */
+let rerender = async () => {};
+
+/**
+ * What to redraw once an exercise is deleted. The app entry point passes its
+ * active tab renderer, so this view never names a tab.
+ *
+ * @param {() => Promise<void>} render
+ */
+export function onExerciseDeleted(render) {
+  rerender = render;
+}
 
 /** @param {string} exerciseId */
 export async function openRunDetail(exerciseId) {
@@ -713,16 +727,14 @@ function confirmDelete(exercise) {
   document.getElementById('modal-confirm-delete')?.addEventListener('click', async () => {
     closeModal();
     try {
-      await deleteExercise(exercise.id);
+      await deleteExercise(exercise.id, { deleteOnServer, remove, forget });
     } catch (err) {
       console.error('Delete failed:', err);
       showToast('Verwijderen mislukt, probeer het later opnieuw', 'error');
       return;
     }
-    await del('exercises', exercise.id);
     closeRunDetail();
-    await forget(exercise.id);
-    await renderActivities();
     showToast('Activiteit verwijderd', 'success');
+    await rerender();
   });
 }
