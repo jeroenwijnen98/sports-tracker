@@ -6,7 +6,7 @@
  * IndexedDB through intake's `remove`, which clears the overlap it leaves
  * behind; then its detail data through the detail loader's `forget`, which
  * waits for any load of it in flight. No DOM: the detail view supplies the
- * three steps, Node tests fakes.
+ * three steps, Node tests supply fakes.
  *
  * @param {string} id
  * @param {{
